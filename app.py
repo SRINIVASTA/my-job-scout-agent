@@ -5,12 +5,29 @@ from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 
-# --- 1. SECURELY LOAD API KEY ---
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("❌ GOOGLE_API_KEY missing! Please add it to your Streamlit Secrets panel.")
-    st.stop()
+# --- 1. SECURE PASSWORD INPUT FOR DESKTOP / CLOUD ---
+# Check if key exists in system environment or Streamlit secrets first
+api_key = os.environ.get("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
-os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+# If not found anywhere, show a password field right on the screen
+if not api_key:
+    st.set_page_config(page_title="API Setup", page_icon="🔑")
+    st.title("🔑 Google Gemini API Authentication")
+    st.info("To run this desktop AI agent application, please enter your Google AI Studio API key below.")
+    
+    # Secure text input that hides characters like a password
+    user_key = st.text_input("Enter your GOOGLE_API_KEY:", type="password", help="Get a free key from Google AI Studio")
+    
+    if user_key:
+        os.environ["GOOGLE_API_KEY"] = user_key
+        st.success("✅ Key loaded successfully! Refreshing app...")
+        st.rerun()
+    else:
+        st.warning("⚠️ Please enter your API key password to unlock the dashboard.")
+        st.stop() # Stops execution here until they provide the key
+else:
+    # Ensure the key is globally accessible to LangChain
+    os.environ["GOOGLE_API_KEY"] = api_key
 
 # --- 2. DEFINE DATA SCHEMAS ---
 class CVProfile(BaseModel):
@@ -34,7 +51,7 @@ class SimulatedJob(BaseModel):
 class SimulatedJobBoardResponse(BaseModel):
     jobs: List[SimulatedJob]
 
-# --- 3. INITIALIZE INITIAL COMPONENTS ---
+# --- 3. INITIALIZE COMPONENTS ---
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 class AgentState(TypedDict):
@@ -92,10 +109,10 @@ workflow.add_edge("fetch_jobs", "rank_jobs")
 workflow.add_edge("rank_jobs", END)
 job_agent = workflow.compile()
 
-# --- 6. STREAMLIT FRONTEND USER INTERFACE ---
+# --- 6. STREAMLIT FRONTEND DASHBOARD ---
 st.set_page_config(page_title="AI Job Scout", layout="wide", page_icon="🤖")
 st.title("🤖 LangGraph AI Job Scout Agent")
-st.caption("Powered by Google Gemini 2.5 & LangGraph — Securely Deployed via Streamlit Cloud")
+st.caption("Powered by Google Gemini 2.5 & LangGraph")
 
 col1, col2 = st.columns(2)
 
@@ -116,12 +133,10 @@ with col2:
             st.warning("⚠️ Please provide some resume text first!")
         else:
             with st.spinner("🧠 Agent is thinking... running LangGraph nodes..."):
-                # Run the LangGraph execution block
                 result = job_agent.invoke({"cv_text": cv_input})
                 profile = result.get("profile")
                 ranked_jobs = result.get("ranked_jobs", [])
                 
-                # Show parsed skills metrics inside lookups
                 if profile:
                     st.success("✅ CV Parsed Successfully!")
                     st.write(f"**Identified Level:** `{profile.experience_level}`")
@@ -129,7 +144,6 @@ with col2:
                 
                 st.divider()
                 
-                # Render scored opportunities
                 for match in ranked_jobs:
                     with st.expander(f"🏢 **{match.job_title}** — {match.company} (Match Score: {match.match_score}%)", expanded=True):
                         st.progress(match.match_score / 100)
