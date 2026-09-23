@@ -13,7 +13,7 @@ def extract_profile_node(state: AgentState):
     return {"profile": extracted_data}
 
 def generate_query_node(state: AgentState):
-    prompt = f"Based on these skills: {state.profile.skills}, output a single short job search keyword (like 'Python', 'React', or 'DevOps') to pass to a query engine."
+    prompt = f"Based on these skills: {state.profile.skills}, output a single short job search phrase focused on the dominant domain intersection (e.g., 'Data Scientist', 'Quantitative', or 'FinTech') to pass to a query engine."
     query_response = get_llm().invoke(prompt)
     clean_query = query_response.content.strip().replace("'", "").replace('"', "")
     return {"search_query": clean_query}
@@ -42,8 +42,8 @@ def fetch_jobs_node(state: AgentState):
         print(f"❌ Market API Connection failed: {e}.")
         
     return {"raw_jobs": [
-        {"id": "fallback_01", "title": f"Senior {search_keyword} Engineer", "requirements": f"Requires strong technical engineering expertise specialized in {search_keyword} design patterns."},
-        {"id": "fallback_02", "title": f"Full Stack {search_keyword} Consultant", "requirements": f"Looking for an architect proficient in scaling modern systems using {search_keyword} technologies."}
+        {"id": "fallback_01", "title": "Senior FinTech Data Scientist", "requirements": "Looking for a specialist to build predictive models, financial risk analytics, and custom RAG architectures for capital markets."},
+        {"id": "fallback_02", "title": "Generative AI & Quantitative Analyst", "requirements": "Requires strong Python ecosystem expertise, portfolio optimization knowledge, and experience building LLM-integrated data pipelines."}
     ]}
 
 def rank_jobs_node(state: AgentState):
