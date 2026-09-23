@@ -13,7 +13,13 @@ def extract_profile_node(state: AgentState):
     return {"profile": extracted_data}
 
 def generate_query_node(state: AgentState):
-    prompt = f"Based on these skills: {state.profile.skills}, output a single short job search phrase focused on the dominant domain intersection (e.g., 'Data Scientist', 'Quantitative', or 'FinTech') to pass to a query engine."
+    # Updated prompt instructions ensuring a high-volume live job board keyword is picked
+    prompt = (
+        f"Based on these candidate skills: {state.profile.skills}, output a single, "
+        f"broad, standard job search keyword that will yield high results on a public job board. "
+        f"Choose EXACTLY one from this list: 'Python', 'Data Scientist', 'Engineer', 'Developer', or 'Analyst'. "
+        f"Do not output markdown, quotes, punctuation, or any extra text. Output just the word."
+    )
     query_response = get_llm().invoke(prompt)
     clean_query = query_response.content.strip().replace("'", "").replace('"', "")
     return {"search_query": clean_query}
