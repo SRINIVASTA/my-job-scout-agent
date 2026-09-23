@@ -6,4 +6,3 @@ pypdf
 plotly
 httpx
 reportlab
-libgl1-mesa-glx
