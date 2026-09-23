@@ -1,6 +1,8 @@
-streamlit
-langchain-google-genai
 langgraph
+langchain-google-genai
 pydantic
 pypdf
+streamlit
 plotly
+httpx
+reportlab
