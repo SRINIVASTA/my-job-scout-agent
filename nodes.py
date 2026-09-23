@@ -25,31 +25,35 @@ def generate_query_node(state: AgentState):
     return {"search_query": clean_query}
 
 def fetch_jobs_node(state: AgentState):
-    search_keyword = state.search_query if state.search_query else "developer"
+    # Ensure we fall back to a broad live word like 'developer' if the state query is blank
+    search_keyword = state.search_query.strip() if state.search_query else "developer"
     
-    # Corrected API endpoint for Arbeitnow to access the correct JSON pay-channel
     url = "https://arbeitnow.com"
     try:
-        response = httpx.get(url, params={"search": search_keyword, "page": 1}, timeout=10.0)
+        response = httpx.get(url, params={"search": search_keyword, "page": 1}, timeout=15.0)
         if response.status_code == 200:
             api_data = response.json()
             jobs_list = api_data.get("data", [])
             
             processed_jobs = []
-            for item in jobs_list[:4]:  # Cap evaluations to top 4 jobs for speed and token efficiency
+            for item in jobs_list[:4]:  # Evaluate top 4 real live jobs
                 processed_jobs.append({
                     "id": item.get("slug", "unknown"),
                     "title": item.get("title", "Job Opening"),
                     "requirements": f"Company: {item.get('company_name')}. Description: {item.get('description')[:800]}"
                 })
-            if processed_jobs:
+            
+            # CRITICAL CHECK: Only return if the live API actually found records!
+            if len(processed_jobs) > 0:
                 return {"raw_jobs": processed_jobs}
+                
     except Exception as e:
         print(f"❌ Market API Connection failed: {e}.")
         
+    # The backup array below will ONLY trigger if the internet breaks completely
     return {"raw_jobs": [
-        {"id": "fallback_01", "title": "Senior FinTech Data Scientist", "requirements": "Looking for a specialist to build predictive models, financial risk analytics, and custom RAG architectures for capital markets."},
-        {"id": "fallback_02", "title": "Generative AI & Quantitative Analyst", "requirements": "Requires strong Python ecosystem expertise, portfolio optimization knowledge, and experience building LLM-integrated data pipelines."}
+        {"id": "fallback_01", "title": f"Live Fetch Failed - Offline Senior Data Scientist", "requirements": "Requires Python expertise, quantitative modeling, and machine learning architectures."},
+        {"id": "fallback_02", "title": f"Live Fetch Failed - Offline AI Framework Architect", "requirements": "Requires portfolio analytics experience, data pipeline building, and RAG systems."}
     ]}
 
 def rank_jobs_node(state: AgentState):
