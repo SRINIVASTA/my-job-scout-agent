@@ -50,6 +50,9 @@ def rank_jobs_node(state: AgentState):
     rankings = []
     structured_ranker = get_llm().with_structured_output(JobMatchScore)
     
+    # Read the threshold dynamically from the LangGraph State (fallback to 70 if missing)
+    current_threshold = getattr(state, 'match_threshold', 70)
+    
     for job in state.raw_jobs:
         prompt = f"""
         Compare Candidate Skills: {state.profile.skills}
@@ -61,7 +64,10 @@ def rank_jobs_node(state: AgentState):
             score_card = structured_ranker.invoke(prompt)
             score_card.job_id = job['id']
             score_card.job_title = job['title']
-            score_card.threshold_passed = True if score_card.fit_score >= 70 else False
+            
+            # Use the dynamic threshold value here!
+            score_card.threshold_passed = True if score_card.fit_score >= current_threshold else False
+            
             rankings.append(score_card)
         except Exception as e:
             print(f"Evaluation error: {e}")
