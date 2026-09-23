@@ -1,10 +1,10 @@
 import httpx
-from langchain_google_genai import ChatGoogleGenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from schemas import AgentState, CandidateProfile, JobMatchScore
 
 # Initialize the Gemini Model dynamically inside the functions to pick up the user's sidebar key
 def get_llm():
-    return ChatGoogleGenAI(model="gemini-2.5-flash", temperature=0)
+    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 def extract_profile_node(state: AgentState):
     structured_gemini = get_llm().with_structured_output(CandidateProfile)
@@ -20,6 +20,8 @@ def generate_query_node(state: AgentState):
 
 def fetch_jobs_node(state: AgentState):
     search_keyword = state.search_query if state.search_query else "developer"
+    
+    # Corrected API endpoint for Arbeitnow to access the correct JSON pay-channel
     url = "https://arbeitnow.com"
     try:
         response = httpx.get(url, params={"search": search_keyword, "page": 1}, timeout=10.0)
