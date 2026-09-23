@@ -14,9 +14,10 @@ class JobMatchScore(BaseModel):
     threshold_passed: bool = Field(default=False, description="True if fit_score is >= 70")
 
 class AgentState(BaseModel):
-    cv_text: str = ""
+    cv_text: str
     profile: Optional[CandidateProfile] = None
-    search_query: str = ""
+    search_query: Optional[str] = None
     raw_jobs: List[dict] = []
     ranked_jobs: List[JobMatchScore] = []
     cover_letters: Dict[str, str] = {}
+    match_threshold: int = 70  # <-- Add this fallback line
