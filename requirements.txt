@@ -3,3 +3,4 @@ langchain-google-genai
 langgraph
 pydantic
 pypdf
+plotly
