@@ -1,141 +1,146 @@
 import streamlit as st
-import plotly.graph_objects as go
-import pypdf
-import os
-import io
+from pypdf import PdfReader
+# Import your LangGraph application instance from your engine file
 from graph_engine import agent_app
 
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+# ⚙️ STREAMLIT PAGE SETUP
+st.set_page_config(
+    page_title="Gemini & LangGraph Job Scout Agent",
+    page_icon="🤖",
+    layout="wide"
+)
 
-st.set_page_config(page_title="Gemini AI Job Scout", page_icon="🤖", layout="wide")
-
-st.title("🤖 Live LangGraph & Gemini Job Matching Agent")
-st.caption("Tracking live opportunities with threshold-highlighted dashboards and professional PDF report exports.")
-
-def generate_report_pdf(final_output):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
-    story = []
-    
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=22, spaceAfter=15, textColor="#1E3A8A")
-    h2_style = ParagraphStyle('H2Style', parent=styles['Heading2'], fontSize=14, spaceBefore=12, spaceAfter=6, textColor="#10B981")
-    body_style = ParagraphStyle('BodyStyle', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=8)
-    
-    story.append(Paragraph("AI Recruitment Analysis Report", title_style))
-    story.append(Paragraph(f"<b>Candidate Evaluated:</b> {final_output['profile'].name}", body_style))
-    story.append(Paragraph(f"<b>Profile Brief:</b> {final_output['profile'].experience_summary}", body_style))
-    story.append(Paragraph(f"<b>Skills Verified:</b> {', '.join(final_output['profile'].skills)}", body_style))
-    story.append(Spacer(1, 15))
-    
-    story.append(Paragraph("Market Placement Scoring", h2_style))
-    for evaluation in final_output['ranked_jobs']:
-        status_text = "PASSING MATCH (>=70%)" if evaluation.threshold_passed else "FIT GAP IDENTIFIED"
-        story.append(Paragraph(f"• <b>{evaluation.job_title}</b>: Match Score: {evaluation.fit_score}/100 [{status_text}]", body_style))
-        story.append(Paragraph(f"<i>Gap Analysis:</i> {evaluation.gap_explanation}", body_style))
-        story.append(Spacer(1, 10))
-        
-    if final_output['cover_letters']:
-        story.append(Spacer(1, 10))
-        story.append(Paragraph("Auto-Drafted Cover Letters (Threshold Passed Positions)", h2_style))
-        for j_id, letter_text in final_output['cover_letters'].items():
-            job_obj = next((j for j in final_output['ranked_jobs'] if j.job_id == j_id), None)
-            j_title = job_obj.job_title if job_obj else "Target Position"
-            story.append(Paragraph(f"<b>Application Pack for: {j_title}</b>", body_style))
-            formatted_letter = letter_text.replace("\n", "<br/>")
-            story.append(Paragraph(formatted_letter, body_style))
-            story.append(Spacer(1, 15))
-            
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
-
+# 🔑 SIDEBAR SETUP
 with st.sidebar:
-    st.header("🔑 Authentication Setup")
-    api_key_input = st.text_input("Google API Key", type="password", help="Enter your Gemini API Key from Google AI Studio")
-    if api_key_input:
-        os.environ["GOOGLE_API_KEY"] = api_key_input
+    st.markdown("### 🔑 Authentication Setup")
+    api_key = st.text_input("Google API Key", type="password")
+    
+    st.markdown("---")
+    st.markdown("### ⚙️ Workflow Configuration")
+    # Dynamic match threshold configuration slider
+    match_threshold = st.slider(
+        "Minimum Fit Score Threshold (%)",
+        min_value=0,
+        max_value=100,
+        value=70,
+        step=5,
+        help="Roles scoring below this percentage will be marked with a FIT GAP DETECTED alert."
+    )
+    
+    st.markdown("---")
+    st.caption("Powered by LangGraph 🦜🔗 & Gemini-2.5-Flash")
 
-uploaded_file = st.file_uploader("Drop your CV Resume here", type=["pdf"])
+# 🖥️ MAIN APPLICATION INTERFACE
+st.title("🤖 Live LangGraph & Gemini Job Matching Agent")
+st.markdown("Tracking live opportunities with threshold-highlighted dashboards and professional tailored report extractions.")
 
-if uploaded_file and not api_key_input:
-    st.warning("⚠️ Please input your Google API Key into the sidebar to authorize the agent workflows.")
+# Check for API Key entry
+if not api_key:
+    st.warning("Please enter your Google API Key in the left sidebar to activate the processing agents.")
+    st.stop()
 
-elif uploaded_file and api_key_input:
-    if st.button("🚀 Run Live Match Engine Pipeline"):
-        with st.spinner("Streaming live web metrics and running analytical graphs..."):
-            pdf_reader = pypdf.PdfReader(uploaded_file)
-            extracted_cv_text = ""
-            for page in pdf_reader.pages:
-                text_content = page.extract_text()
-                if text_content:
-                    extracted_cv_text += text_content + "\n"
+# 📥 RESUME UPLOAD COMPONENT
+uploaded_file = st.file_saver = st.file_uploader("Drop your CV Resume here", type=["pdf"])
+
+if uploaded_file is not None:
+    # Read text contents from uploaded PDF file binary stream
+    try:
+        pdf_reader = PdfReader(uploaded_file)
+        raw_cv_text = ""
+        for page in pdf_reader.pages:
+            text_content = page.extract_text()
+            if text_content:
+                raw_cv_text += text_content + "\n"
+                
+        if not raw_cv_text.strip():
+            st.error("Could not extract legible text from your PDF. Please ensure it is not an image scan.")
+            st.stop()
             
-            initial_state = {"cv_text": extracted_cv_text}
-            final_output = agent_app.invoke(initial_state)
-            st.session_state["pipeline_results"] = final_output
-            st.success("🎉 Pipeline Complete!")
-            
-    if "pipeline_results" in st.session_state:
-        final_output = st.session_state["pipeline_results"]
-        pdf_bytes = generate_report_pdf(final_output)
-        st.download_button(
-            label="📥 Download Complete Analysis & Application Pack (.PDF)",
-            data=pdf_bytes,
-            file_name="AI_Job_Scout_Report.pdf",
-            mime="application/pdf"
-        )
-        st.divider()
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("📋 Candidate Profile Extraction Matrix")
-            st.write(f"**Name:** {final_output['profile'].name}")
-            st.write(f"**Background Profile:** {final_output['profile'].experience_summary}")
-            st.write("**Extracted Skill Badges:**")
-            st.write(", ".join([f"`{skill}`" for skill in final_output['profile'].skills]))
-            st.info(f"Targeting vacancies using query string: **'{final_output['search_query']}'**")
-        
-        with col2:
-            st.subheader("📊 Threshold-Highlighted Placement Metrics")
-            job_titles = [item.job_title for item in final_output['ranked_jobs']]
-            scores = [item.fit_score for item in final_output['ranked_jobs']]
-            
-            THRESHOLD = 70
-            bar_colors = ["#10B981" if s >= THRESHOLD else "#EF4444" for s in scores]
-            text_positions = ["Matched ✅" if s >= THRESHOLD else "Gap Identified ❌" for s in scores]
-            
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=scores, y=job_titles, orientation='h', marker_color=bar_colors,
-                text=[f"  {s}% - {pos}" for s, pos in zip(scores, text_positions)],
-                textposition='outside', hovertemplate="<b>Match Score:</b> %{x}%<extra></extra>"
-            ))
-            fig.add_shape(
-                type="line", x0=THRESHOLD, y0=-0.5, x1=THRESHOLD, y1=len(job_titles)-0.5,
-                line=dict(color="Gold", width=3, dash="dashdot")
-            )
-            fig.update_layout(
-                xaxis=dict(title="Match Suitability Percentage (%)", range=[0, 110]),
-                yaxis=dict(autorange="reversed"), margin=dict(l=20, r=20, t=30, b=20), height=350,
-                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-        st.divider()
-        st.subheader("🔎 In-Depth Job Positioning Reports")
-        for evaluation in final_output['ranked_jobs']:
-            status_badge = "🟢 PASSING MATCH" if evaluation.threshold_passed else "🔴 FIT GAP DETECTED"
-            with st.expander(f"📍 {evaluation.job_title} — Score: {evaluation.fit_score}/100 [{status_badge}]"):
-                tab1, tab2 = st.tabs(["Skill Gap Critique", "Tailored Cover Letter 📝"])
-                with tab1:
-                    st.markdown("**Missing Technical Attributes / Skill Gap Critique:**")
-                    st.write(evaluation.gap_explanation)
-                with tab2:
-                    if evaluation.threshold_passed:
-                        letter_data = final_output['cover_letters'].get(evaluation.job_id, "Generating letter structure...")
-                        st.text_area("Auto-Generated Cover Letter Draft", value=letter_data, height=300, key=evaluation.job_id)
-                    else:
-                        st.info("💡 Cover letters are automatically skipped for applications that sit under the 70% suitability threshold.")
+    except Exception as e:
+        st.error(f"Error reading PDF file structure: {e}")
+        st.stop()
+
+    # 🚀 PIPELINE RUNTRIGGER
+    if st.button("🚀 Run Agent Pipeline Framework", use_container_width=True):
+        with st.spinner("Orchestrating multi-agent graph nodes (Extraction -> Search -> Ranking -> Generation)..."):
+            try:
+                # Construct initial compilation state dictionary, including our new UI slider value
+                initial_state = {
+                    "cv_text": raw_cv_text,
+                    "match_threshold": match_threshold,  # Pass threshold state downstream to graph nodes
+                    "raw_jobs": [],
+                    "ranked_jobs": [],
+                    "cover_letters": {}
+                }
+                
+                # Execute LangGraph runtime pipeline synchronously
+                final_output_state = agent_app.invoke(initial_state)
+                
+                st.success("🎉 Pipeline Complete!")
+                st.markdown("---")
+                
+                # 📋 RENDERING NODE 1 OUTPUT: CANDIDATE PROFILE EXTRACTION MATRIX
+                profile = final_output_state.get("profile")
+                if profile:
+                    st.subheader("📋 Candidate Profile Extraction Matrix")
+                    st.markdown(f"**Name:** {getattr(profile, 'name', 'Unknown Candidate')}")
+                    st.markdown(f"**Background Profile:** {getattr(profile, 'experience_summary', 'N/A')}")
+                    
+                    # Style skills as beautiful markdown badges
+                    skills_list = getattr(profile, 'skills', [])
+                    if skills_list:
+                        st.markdown("**Extracted Skill Badges:**")
+                        badges = " ".join([f"`{skill.strip()}`" for skill in skills_list])
+                        st.markdown(badges)
+                
+                search_query = final_output_state.get("search_query", "N/A")
+                st.info(f"Targeting vacancies using auto-generated agent query string: **'{search_query}'**")
+                st.markdown("---")
+                
+                # 📊 RENDERING NODE 3 OUTPUT: THRESHOLD HIGHLIGHTED METRICS
+                st.subheader("📊 Threshold-Highlighted Placement Metrics")
+                ranked_jobs = final_output_state.get("ranked_jobs", [])
+                
+                if not ranked_jobs:
+                    st.warning("No job openings evaluated or fallback nodes triggered.")
+                else:
+                    st.markdown("### 🔎 In-Depth Job Positioning Reports")
+                    
+                    for index, score_card in enumerate(ranked_jobs):
+                        # Determine badge layout status contextually using the current threshold slider bounds
+                        score = getattr(score_card, 'fit_score', 0)
+                        
+                        # Dynamically check threshold bounds again on UI layout render step
+                        if score >= match_threshold:
+                            status_badge = f"🍏 **MATCH PASSED** ({score}/100)"
+                            color_container = st.success
+                        else:
+                            status_badge = f"🔴 **FIT GAP DETECTED** ({score}/100)"
+                            color_container = st.error
+                        
+                        # Draw high-visibility layout boxes per evaluation entry
+                        with color_container(f"📍 {getattr(score_card, 'job_title', 'Role Evaluation')} — {status_badge}"):
+                            # Split into side-by-side informational columns using proper width definitions
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown("**Critique Evaluation Matrix:**")
+                                st.write(getattr(score_card, 'critique', 'No analysis details provided by model node.'))
+                            
+                            with col2:
+                                st.markdown("**Generated Document Utilities:**")
+                                # Read cover letter text map from final state matching this exact job ID
+                                cover_letters_map = final_output_state.get("cover_letters", {})
+                                job_id = getattr(score_card, 'job_id', '')
+                                target_letter = cover_letters_map.get(job_id)
+                                
+                                if target_letter:
+                                    # Show expandable text box containing tailored copy
+                                    with st.expander("📄 View Tailored Cover Letter Content"):
+                                        st.text_area(label="Raw Output Copy", value=target_letter, height=250, key=f"txt_{index}")
+                                else:
+                                    st.caption("Cover letter generated exclusively for roles surpassing target pipeline configuration threshold settings.")
+                                    
+            except Exception as pipeline_error:
+                st.error(f"An unexpected disruption occurred during LangGraph node orchestration tracking: {pipeline_error}")
+                st.exception(pipeline_error)
