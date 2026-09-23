@@ -2,3 +2,4 @@ streamlit
 langchain-google-genai
 langgraph
 pydantic
+pypdf
