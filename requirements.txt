@@ -6,3 +6,4 @@ pypdf==5.3.1
 plotly==6.0.0
 httpx==0.28.1
 reportlab==4.3.1
+libgl1-mesa-glx
