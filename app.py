@@ -89,7 +89,7 @@ elif uploaded_file and api_key_input:
         )
         st.divider()
         
-        col1, col2 = st.columns()
+        col1, col2 = st.columns(2)
         with col1:
             st.subheader("📋 Candidate Profile Extraction Matrix")
             st.write(f"**Name:** {final_output['profile'].name}")
