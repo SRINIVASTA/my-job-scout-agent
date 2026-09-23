@@ -20,12 +20,16 @@ with col1:
     
     if input_method == "Upload PDF File":
         uploaded_file = st.file_uploader("Drag and drop your CV profile here (PDF format):", type=["pdf"])
+        
+        # Explicit check to verify a file stream object exists before reading
         if uploaded_file is not None:
             with st.spinner("📄 Reading PDF text data..."):
                 try:
-                    # Initialize PyPDF Reader on the uploaded binary stream
+                    # Initialize PyPDF Reader directly on the file object
                     reader = PdfReader(uploaded_file)
                     extracted_text = ""
+                    
+                    # Extract text safely page by page
                     for page in reader.pages:
                         text = page.extract_text()
                         if text:
@@ -34,20 +38,16 @@ with col1:
                     if extracted_text.strip():
                         cv_text_to_process = extracted_text
                         st.success(f"✅ Successfully extracted text from '{uploaded_file.name}'!")
-                        # Preview snippet of the document to the user
-                        with st.checkbox("🔍 Preview Extracted Text"):
-                            st.text_area("Extracted Payload Preview", value=cv_text_to_process[:800] + "...", height=150, disabled=True)
                     else:
                         st.error("⚠️ Could not read text layers from this PDF. It might be scanned as a flat image.")
+                        
                 except Exception as e:
                     st.error(f"❌ Failed to parse document: {e}")
-                    
-    else:
-        cv_text_to_process = st.text_area(
-            "Paste your CV text or professional summary below:", 
-            height=300, 
-            placeholder="John Doe\nSkills: Python, SQL..."
-        )
+            
+            # This visual checkbox block sits cleanly outside of the try/except stream loops
+            if cv_text_to_process:
+                if st.checkbox("🔍 Preview Extracted Text"):
+                    st.text_area("Extracted Payload Preview", value=cv_text_to_process[:1000], height=200, disabled=True)
         
     st.divider()
     run_btn = st.button("🚀 Run Analysis Agent", type="primary", use_container_width=True)
