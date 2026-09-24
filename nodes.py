@@ -13,12 +13,14 @@ def extract_profile_node(state: AgentState):
     return {"profile": extracted_data}
 
 def generate_query_node(state: AgentState):
-    # Updated prompt instructions ensuring a high-volume live job board keyword is picked
+    # This instructs Gemini to read your CV data directly and pick the best real-world title
     prompt = (
-        f"Based on these candidate skills: {state.profile.skills}, output a single, "
-        f"broad, standard job search keyword that will yield high results on a public job board. "
-        f"Choose EXACTLY one from this list: 'Python', 'Data Scientist', 'Engineer', 'Developer', or 'Analyst'. "
-        f"Do not output markdown, quotes, punctuation, or any extra text. Output just the word."
+        f"You are an expert recruiter. Read this candidate's background and skills derived from their CV:\n"
+        f"Background: {state.profile.experience_summary}\n"
+        f"Skills: {state.profile.skills}\n\n"
+        f"Based strictly on their actual profile, output a single target job title "
+        f"phrase (1 to 3 words max) to search for on live job boards. "
+        f"Do not output markdown, quotes, punctuation, or any extra text. Output just the title."
     )
     query_response = get_llm().invoke(prompt)
     clean_query = query_response.content.strip().replace("'", "").replace('"', "")
