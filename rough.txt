@@ -1,0 +1,3 @@
+GITHUB_TOKEN = "ghp_yourActualGitHubTokenGoesHere"
+APP_PASSWORD = "your_secret_internal_password"
+FIRECRAWL_API_KEY = "fc-yourActualFirecrawlApiKeyGoesHere"
