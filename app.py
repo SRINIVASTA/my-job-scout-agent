@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from pypdf import PdfReader
 # Import your LangGraph application instance from your engine file
@@ -40,7 +41,7 @@ if not api_key:
     st.stop()
 
 # 📥 RESUME UPLOAD COMPONENT
-uploaded_file = st.file_saver = st.file_uploader("Drop your CV Resume here", type=["pdf"])
+uploaded_file = st.file_uploader("Drop your CV Resume here", type=["pdf"])
 
 if uploaded_file is not None:
     # Read text contents from uploaded PDF file binary stream
@@ -62,8 +63,7 @@ if uploaded_file is not None:
 
     # 🚀 PIPELINE RUNTRIGGER
     if st.button("🚀 Run Agent Pipeline Framework", use_container_width=True):
-        # ⬇️ CRITICAL FIX: Explicitly bind the captured UI key to the active system environment
-        import os
+        # ⬇️ ENV VARIABLE BINDING FIX: Injects key context globally into active environment runtime space
         os.environ["GOOGLE_API_KEY"] = api_key
         
         with st.spinner("Orchestrating multi-agent graph nodes (Extraction -> Search -> Ranking -> Generation)..."):
@@ -129,7 +129,8 @@ if uploaded_file is not None:
                             
                             with col1:
                                 st.markdown("**Critique Evaluation Matrix:**")
-                                st.write(getattr(score_card, 'critique', 'No analysis details provided by model node.'))
+                                # ⬇️ PROPERTY RESOLUTION FIX: Swapped out missing 'critique' attribute for real schema 'gap_explanation' field
+                                st.write(getattr(score_card, 'gap_explanation', 'No analysis details provided by model node.'))
                             
                             with col2:
                                 st.markdown("**Generated Document Utilities:**")
