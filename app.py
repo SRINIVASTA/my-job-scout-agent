@@ -63,7 +63,7 @@ if uploaded_file is not None:
 
     # 🚀 PIPELINE RUNTRIGGER
     if st.button("🚀 Run Agent Pipeline Framework", use_container_width=True):
-        # ⬇️ ENV VARIABLE BINDING FIX: Injects key context globally into active environment runtime space
+        # ENV VARIABLE BINDING FIX: Injects key context globally into active environment runtime space
         os.environ["GOOGLE_API_KEY"] = api_key
         
         with st.spinner("Orchestrating multi-agent graph nodes (Extraction -> Search -> Ranking -> Generation)..."):
@@ -129,7 +129,7 @@ if uploaded_file is not None:
                             
                             with col1:
                                 st.markdown("**Critique Evaluation Matrix:**")
-                                # ⬇️ PROPERTY RESOLUTION FIX: Swapped out missing 'critique' attribute for real schema 'gap_explanation' field
+                                # PROPERTY RESOLUTION FIX: Swapped out missing 'critique' attribute for real schema 'gap_explanation' field
                                 st.write(getattr(score_card, 'gap_explanation', 'No analysis details provided by model node.'))
                             
                             with col2:
@@ -142,7 +142,17 @@ if uploaded_file is not None:
                                 if target_letter:
                                     # Show expandable text box containing tailored copy
                                     with st.expander("📄 View Tailored Cover Letter Content"):
-                                        st.text_area(label="Raw Output Copy", value=target_letter, height=250, key=f"txt_{index}")
+                                        st.text_area(label="Raw Output Copy", value=target_letter, height=300, key=f"txt_{index}")
+                                        
+                                        # 📥 UTILITY UPGRADE: Instant one-click file download option for the user
+                                        clean_title = getattr(score_card, 'job_title', 'role').replace(" ", "_").lower()
+                                        st.download_button(
+                                            label="📥 Download Cover Letter (.txt)",
+                                            data=target_letter,
+                                            file_name=f"cover_letter_{clean_title}.txt",
+                                            mime="text/plain",
+                                            key=f"dl_{index}"
+                                        )
                                 else:
                                     st.caption("Cover letter generated exclusively for roles surpassing target pipeline configuration threshold settings.")
                                     
