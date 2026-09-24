@@ -84,6 +84,8 @@ def rank_jobs_node(state: AgentState):
     return {"ranked_jobs": rankings}
 
 def generate_cover_letters_node(state: AgentState):
+    llm_writer = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, max_output_tokens=2048)
+
     drafted_letters = {}
     for score_card in state.ranked_jobs:
         if score_card.threshold_passed:
