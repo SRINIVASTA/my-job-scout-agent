@@ -62,6 +62,10 @@ if uploaded_file is not None:
 
     # 🚀 PIPELINE RUNTRIGGER
     if st.button("🚀 Run Agent Pipeline Framework", use_container_width=True):
+        # ⬇️ CRITICAL FIX: Explicitly bind the captured UI key to the active system environment
+        import os
+        os.environ["GOOGLE_API_KEY"] = api_key
+        
         with st.spinner("Orchestrating multi-agent graph nodes (Extraction -> Search -> Ranking -> Generation)..."):
             try:
                 # Construct initial compilation state dictionary, including our new UI slider value
