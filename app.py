@@ -2,6 +2,7 @@ import os
 import streamlit as st
 from pypdf import PdfReader
 from graph_engine import agent_app
+from nodes import generate_pdf_document
 
 st.set_page_config(
     page_title="Gemini & LangGraph Job Scout Agent",
@@ -54,7 +55,6 @@ if uploaded_file is not None:
 
     # 🚀 ORCHESTRATION PIPELINE BUTTON
     if st.button("🚀 Run Agent Pipeline Framework", use_container_width=True):
-        # Inject dynamic security environment variables configurations
         if google_key:
             os.environ["GOOGLE_API_KEY"] = google_key
         if hf_token:
@@ -119,13 +119,19 @@ if uploaded_file is not None:
                                 if target_letter:
                                     with st.expander("📄 View Tailored Cover Letter Content"):
                                         st.text_area(label="Raw Output Copy", value=target_letter, height=250, key=f"txt_{index}")
-                                        clean_title = getattr(score_card, 'job_title', 'role').replace(" ", "_").lower()
+                                        
+                                        candidate_name = getattr(profile, 'name', 'Candidate')
+                                        job_title = getattr(score_card, 'job_title', 'Target Role')
+                                        pdf_data = generate_pdf_document(candidate_name, job_title, target_letter)
+                                        clean_title = job_title.replace(" ", "_").lower()
+                                        
+                                        # 📥 EXCLUSIVE PDF COMPILATION EXPORT BUTTON
                                         st.download_button(
-                                            label="📥 Download Cover Letter (.txt)",
-                                            data=target_letter,
-                                            file_name=f"cover_letter_{clean_title}.txt",
-                                            mime="text/plain",
-                                            key=f"dl_{index}"
+                                            label="📥 Download Cover Letter (PDF Only)",
+                                            data=pdf_data,
+                                            file_name=f"cover_letter_{clean_title}.pdf",
+                                            mime="application/pdf",
+                                            key=f"pdf_dl_{index}"
                                         )
                                 else:
                                     st.caption("Cover letter generated exclusively for roles surpassing target configuration threshold settings.")
