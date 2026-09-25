@@ -21,6 +21,7 @@ class AgentState(BaseModel):
     ranked_jobs: List[JobMatchScore] = []
     cover_letters: Dict[str, str] = {}
     match_threshold: int = 70
+    time_filter: str = "past 3 days" # ⏱️ Extends time boundary states downstream
     
     # Internal dynamic transit tracking maps for keys
     google_api_key: Optional[str] = None
