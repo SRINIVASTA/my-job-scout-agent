@@ -16,7 +16,6 @@ def get_hf_llm(state: AgentState):
     This resolves the 'conversational' task requirement by routing through chat message formats.
     """
     if state.hf_token:
-        # Define base endpoint as conversational to match provider routing rules
         base_llm = HuggingFaceEndpoint(
             repo_id="Qwen/Qwen2.5-Coder-7B-Instruct",
             task="conversational",
@@ -86,18 +85,17 @@ def generate_query_node(state: AgentState):
     llm = get_hf_llm(state)
     messages = [HumanMessage(content=prompt)]
     response = llm.invoke(messages).content.strip()
-    clean_query = response.replace("'", "").replace('"', "").split("\n")[0].strip()
+    clean_query = response.replace("'", "").replace('"', "").split("\n").strip()
     return {"search_query": clean_query}
-
 def fetch_jobs_node(state: AgentState):
     search_keyword = state.search_query.strip() if state.search_query else "developer"
     
     if state.firecrawl_api_key:
         try:
             app = FirecrawlApp(api_key=state.firecrawl_api_key)
-            # Optimized broad internet search query string
+            # Broad web-scale targeted search parameters configuration
             search_result = app.search(
-                query=f'"{search_keyword}" remote jobs hiring',
+                query=f'"{search_keyword}" remote jobs hiring 2026',
                 params={"limit": 3}
             )
             
@@ -205,11 +203,13 @@ def generate_cover_letters_node(state: AgentState):
                     print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
 
             # Fallback to Hugging Face
-
-            # Fallback to Hugging Face
             if not letter_written:
-                llm = get_hf_llm(state)
-                hf_prompt = f"<|im_start|>user\n{writer_prompt}<|im_end|>\n<|im_start|>assistant\n"
-                draft = llm.invoke(hf_prompt).strip()
-                drafted_letters[score_card.job_id] = draft
-    return {"cover_letters": exhausted_letters if 'exhausted_letters' in locals() else drafted_letters}
+                try:
+                    llm = get_hf_llm(state)
+                    messages = [HumanMessage(content=writer_prompt)]
+                    draft = llm.invoke(messages).content.strip()
+                    drafted_letters[score_card.job_id] = draft
+                except Exception as write_err:
+                    print(f"⚠️ HF Letter writing failed: {write_err}")
+                    
+    return {"cover_letters": drafted_letters}
