@@ -96,7 +96,7 @@ def fetch_jobs_node(state: AgentState):
         try:
             app = FirecrawlApp(api_key=state.firecrawl_api_key)
             search_result = app.search(
-                query=f"site:://remoteok.com{search_keyword}-jobs",
+                query=f'"{search_keyword}" jobs remote hiring 2026',
                 params={"limit": 3}
             )
             
