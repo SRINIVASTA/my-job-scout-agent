@@ -10,39 +10,61 @@ st.set_page_config(
     layout="wide"
 )
 
+# Initialize system session access states
+if "activated" not in st.session_state:
+    st.session_state.activated = False
+
 # 🔑 SIDEBAR INPUT AGGREGATOR PANEL
 with st.sidebar:
-    st.markdown("### 🔑 Authentication Setup")
-    google_key = st.text_input("Google API Key", type="password", help="Primary LLM processor")
-    hf_token = st.text_input("Hugging Face Token", type="password", help="Automatic fallback LLM runner token")
-    firecrawl_key = st.text_input("Firecrawl API Key", type="password", help="Live web scraping engine key")
+    st.markdown("### 🔑 Secure Dashboard Access")
     
+    # Check if keys are present in the Streamlit secrets structure
+    if "MASTER_PASSWORD" not in st.secrets:
+        st.error("🔒 Configuration Error: 'MASTER_PASSWORD' not discovered inside secrets.toml file space.")
+        st.stop()
+        
+    user_password_input = st.text_input(
+        "Enter Master Password", 
+        type="password", 
+        help="Input your private security password to unlock background API execution frameworks."
+    )
+    
+    if user_password_input:
+        if user_password_input == st.secrets["MASTER_PASSWORD"]:
+            st.session_state.activated = True
+            st.success("🔓 Dashboard Unlocked Successfully!")
+        else:
+            st.session_state.activated = False
+            st.sidebar.error("❌ Invalid Password Token. Access Denied.")
+            
     st.markdown("---")
     st.markdown("### ⚙️ Workflow Configuration")
     
-    # ⏱️ NEW LIVE HORIZON TIME WINDOW SELECTION TOOL
     selected_time_window = st.selectbox(
         "Scrape Live Postings Within:",
         options=["Within 1 Hour", "Past 24 Hours", "Past 3 Days"],
         index=2,
+        disabled=not st.session_state.activated,
         help="Filters live Firecrawl web crawl targets to match your exact application timeline."
     )
     
     match_threshold = st.slider(
         "Minimum Fit Score Threshold (%)",
-        min_value=0, max_value=100, value=70, step=5,
+        min_value=0, max_value=100, value=50, step=5,
+        disabled=not st.session_state.activated,
         help="Roles scoring below this percentage will be flagged with a FIT GAP DETECTED alert."
     )
     st.markdown("---")
-    st.caption("Robust Fallback Enabled Engine 🦜🔗")
+    st.caption("Secure Vault Enabled Engine 🔒")
 
+# 🖥️ MAIN GATEKEEPER DISPLAY LAYER
 st.title("🤖 Live LangGraph & Gemini Job Matching Agent")
-st.markdown("Tracking opportunities with threshold-highlighted dashboards and professional tailored report extractions.")
 
-# Verify that at least one functional text-processing token configuration exists
-if not google_key and not hf_token:
-    st.warning("Please provide either a Google API Key or a Hugging Face Token in the sidebar to activate the processing agents.")
+if not st.session_state.activated:
+    st.warning("🔒 Access Restricted: Please provide the valid custom Master Password inside the sidebar configuration box to unlock your processing agents.")
     st.stop()
+
+st.markdown("Tracking opportunities with threshold-highlighted dashboards and professional tailored report extractions.")
 
 # 📥 RESUME UPLOAD UTILITY
 uploaded_file = st.file_uploader("Drop your CV Resume here", type=["pdf"])
@@ -64,8 +86,13 @@ if uploaded_file is not None:
 
     # 🚀 ORCHESTRATION PIPELINE BUTTON
     if st.button("🚀 Run Agent Pipeline Framework", use_container_width=True):
-        if google_key:
-            os.environ["GOOGLE_API_KEY"] = google_key
+        # Fetch tokens implicitly straight out of secret configuration spaces
+        google_api_key = st.secrets.get("GOOGLE_API_KEY", "")
+        hf_token = st.secrets.get("HF_TOKEN", "")
+        firecrawl_key = st.secrets.get("FIRECRAWL_API_KEY", "")
+        
+        if google_api_key:
+            os.environ["GOOGLE_API_KEY"] = google_api_key
         if hf_token:
             os.environ["HF_TOKEN"] = hf_token
             
@@ -74,8 +101,8 @@ if uploaded_file is not None:
                 initial_state = {
                     "cv_text": raw_cv_text,
                     "match_threshold": match_threshold,
-                    "time_filter": selected_time_window.lower(), # Sends chosen timeline choice downstream
-                    "google_api_key": google_key,
+                    "time_filter": selected_time_window.lower(),
+                    "google_api_key": google_api_key,
                     "hf_token": hf_token,
                     "firecrawl_api_key": firecrawl_key,
                     "raw_jobs": [],
@@ -130,12 +157,10 @@ if uploaded_file is not None:
                                     with st.expander("📄 View Tailored Cover Letter Content"):
                                         st.text_area(label="Raw Output Copy", value=target_letter, height=250, key=f"txt_{index}")
                                         
-                                        # Text and PDF generation hooks inside the expanded cards:
                                         candidate_name = getattr(profile, 'name', 'Candidate')
                                         job_title = getattr(score_card, 'job_title', 'Target Role')
                                         clean_title = job_title.replace(" ", "_").lower()
                                         
-                                        # Utility 1: Text format download
                                         st.download_button(
                                             label="📥 Download Cover Letter (.txt)",
                                             data=target_letter,
@@ -144,7 +169,6 @@ if uploaded_file is not None:
                                             key=f"txt_dl_{index}"
                                         )
                                         
-                                        # Utility 2: Production PDF format download
                                         pdf_data = generate_pdf_document(candidate_name, job_title, target_letter)
                                         st.download_button(
                                             label="📥 Download Cover Letter (PDF Only)",
@@ -154,7 +178,7 @@ if uploaded_file is not None:
                                             key=f"pdf_dl_{index}"
                                         )
                                 else:
-                                    st.caption("Cover letter generated exclusively for roles surpassing target configuration threshold settings.")
+                                    st.caption("Cover letter generated exclusively for roles surging past parameters.")
                                     
             except Exception as pipeline_error:
                 st.error(f"An unexpected disruption occurred during LangGraph node orchestration: {pipeline_error}")
