@@ -11,7 +11,7 @@ class JobMatchScore(BaseModel):
     job_title: str = Field(description="Title of the evaluated job position")
     fit_score: int = Field(description="A ranking fit score from 0 to 100")
     gap_explanation: str = Field(description="Honest explanation of gaps between candidate and job profile")
-    threshold_passed: bool = Field(default=False, description="True if fit_score is >= 70")
+    threshold_passed: bool = Field(default=False, description="True if fit_score is >= threshold")
 
 class AgentState(BaseModel):
     cv_text: str
@@ -20,4 +20,9 @@ class AgentState(BaseModel):
     raw_jobs: List[dict] = []
     ranked_jobs: List[JobMatchScore] = []
     cover_letters: Dict[str, str] = {}
-    match_threshold: int = 70  # <-- Add this fallback line
+    match_threshold: int = 70
+    
+    # Internal dynamic transit tracking maps for keys
+    google_api_key: Optional[str] = None
+    hf_token: Optional[str] = None
+    firecrawl_api_key: Optional[str] = None
