@@ -10,10 +10,13 @@ def get_gemini_llm():
     return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 def get_hf_llm(state: AgentState):
-    """Helper to return a Hugging Face Llama instance."""
+    """
+    Helper to return a Hugging Face serverless execution model.
+    Switched model to Qwen2.5-Coder-7B-Instruct to guarantee text-generation task support.
+    """
     if state.hf_token:
         return HuggingFaceEndpoint(
-            repo_id="meta-llama/Llama-3.1-8B-Instruct",
+            repo_id="Qwen/Qwen2.5-Coder-7B-Instruct",
             task="text-generation",
             temperature=0.1,
             huggingfacehub_api_token=state.hf_token
@@ -36,12 +39,12 @@ def extract_profile_node(state: AgentState):
     # Fallback to Hugging Face
     llm = get_hf_llm(state)
     hf_prompt = (
-        f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
+        f"<|im_start|>system\n"
         f"You are a strict data-formatting AI tool. You must respond ONLY with a valid raw JSON object matching this schema:\n"
         f"{{\"name\": \"string\", \"skills\": [\"string\"], \"experience_summary\": \"string\"}}\n"
-        f"Do not include markdown tags, preamble text, or explanations.<|eot_id|>\n"
-        f"<|start_header_id|>user<|end_header_id|>\n{prompt}<|eot_id|>\n"
-        f"<|start_header_id|>assistant<|end_header_id|>\n"
+        f"Do not include markdown tags, preamble text, or explanations.<|im_end|>\n"
+        f"<|im_start|>user\n{prompt}<|im_end|>\n"
+        f"<|im_start|>assistant\n"
     )
     response = llm.invoke(hf_prompt).strip()
     try:
@@ -76,7 +79,7 @@ def generate_query_node(state: AgentState):
 
     # Fallback to Hugging Face
     llm = get_hf_llm(state)
-    hf_prompt = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
+    hf_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
     response = llm.invoke(hf_prompt)
     clean_query = response.strip().replace("'", "").replace('"', "").split("\n")[0]
     return {"search_query": clean_query}
@@ -142,12 +145,12 @@ def rank_jobs_node(state: AgentState):
         if not evaluated:
             llm = get_hf_llm(state)
             hf_prompt = (
-                f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
+                f"<|im_start|>system\n"
                 f"You are an evaluator. Output ONLY valid raw JSON matching this structure exactly:\n"
                 f"{{\"fit_score\": 85, \"gap_explanation\": \"Missing explicit documentation detail rules\"}}\n"
-                f"Do not write markdown tags.<|eot_id|>\n"
-                f"<|start_header_id|>user<|end_header_id|>\n{prompt}<|eot_id|>\n"
-                f"<|start_header_id|>assistant<|end_header_id|>\n"
+                f"Do not write markdown tags.<|im_end|>\n"
+                f"<|im_start|>user\n{prompt}<|im_end|>\n"
+                f"<|im_start|>assistant\n"
             )
             try:
                 response = llm.invoke(hf_prompt).strip()
@@ -197,8 +200,7 @@ def generate_cover_letters_node(state: AgentState):
             # Fallback to Hugging Face
             if not letter_written:
                 llm = get_hf_llm(state)
-                hf_prompt = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n{writer_prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
+                hf_prompt = f"<|im_start|>user\n{writer_prompt}<|im_end|>\n<|im_start|>assistant\n"
                 draft = llm.invoke(hf_prompt).strip()
                 drafted_letters[score_card.job_id] = draft
-            
-    return {"cover_letters": drafted_letters}
+    return {"cover_letters": exhausted_letters if 'exhausted_letters' in locals() else drafted_letters}
