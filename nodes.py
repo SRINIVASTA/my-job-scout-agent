@@ -1,9 +1,14 @@
 import os
 import json
+import io
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.messages import HumanMessage, SystemMessage
 from firecrawl import FirecrawlApp
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 from schemas import AgentState, CandidateProfile, JobMatchScore
 
 def get_gemini_llm():
@@ -13,7 +18,7 @@ def get_gemini_llm():
 def get_hf_llm(state: AgentState):
     """
     Helper to return a Hugging Face serverless execution model wrapped in ChatHuggingFace.
-    Added max_new_tokens parameter to resolve cover letter text truncation issues.
+    This resolves the 'conversational' task requirement by routing through chat message formats.
     """
     if state.hf_token:
         base_llm = HuggingFaceEndpoint(
@@ -21,8 +26,7 @@ def get_hf_llm(state: AgentState):
             task="conversational",
             temperature=0.1,
             huggingfacehub_api_token=state.hf_token,
-            # 🚀 FIXED: Allow the model to write longer text bodies without cutting off
-            max_new_tokens=2048 
+            max_new_tokens=2048
         )
         return ChatHuggingFace(llm=base_llm)
     raise RuntimeError("Critical: Gemini failed and Hugging Face token is missing in state.")
@@ -87,7 +91,6 @@ def generate_query_node(state: AgentState):
     llm = get_hf_llm(state)
     messages = [HumanMessage(content=prompt)]
     response = llm.invoke(messages).content.strip()
-    # 🕵️‍♂️ FIXED STRIP ORDER LOGIC OVER THE CONVERTED STRING COMPONENT 
     clean_query = response.replace("'", "").replace('"', "").split("\n")[0].strip()
     return {"search_query": clean_query}
 def fetch_jobs_node(state: AgentState):
@@ -96,9 +99,8 @@ def fetch_jobs_node(state: AgentState):
     if state.firecrawl_api_key:
         try:
             app = FirecrawlApp(api_key=state.firecrawl_api_key)
-            # Broad web-scale targeted search parameters configuration
             search_result = app.search(
-                query=f'"{search_keyword}" remote jobs hiring 2026',
+                query=f'"{search_keyword}" remote jobs hiring',
                 params={"limit": 3}
             )
             
@@ -209,10 +211,61 @@ def generate_cover_letters_node(state: AgentState):
             if not letter_written:
                 try:
                     llm = get_hf_llm(state)
-                    messages = [HumanMessage(content=writer_prompt)]
+                    messages = [
+                        SystemMessage(content="You are an expert executive recruiter writing comprehensive corporate cover letters. Provide the complete text output without truncating or stopping mid-sentence."),
+                        HumanMessage(content=writer_prompt)
+                    ]
                     draft = llm.invoke(messages).content.strip()
                     drafted_letters[score_card.job_id] = draft
                 except Exception as write_err:
                     print(f"⚠️ HF Letter writing failed: {write_err}")
                     
     return {"cover_letters": drafted_letters}
+
+def generate_pdf_document(candidate_name: str, job_title: str, document_body: str) -> io.BytesIO:
+    """Transforms plain text agent generation copy into a production-grade binary layout stream buffer strictly using ReportLab flowables."""
+    buffer = io.BytesIO()
+    
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=54, 
+        leftMargin=54, 
+        topMargin=54, 
+        bottomMargin=54,
+        title=f"Cover Letter - {job_title}"
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'DocTitle', 
+        parent=styles['Heading1'], 
+        fontSize=20, 
+        leading=24, 
+        textColor=colors.HexColor("#1A365D"), 
+        spaceAfter=15
+    )
+    body_style = ParagraphStyle(
+        'DocBody', 
+        parent=styles['Normal'], 
+        fontSize=10.5, 
+        leading=16, 
+        textColor=colors.HexColor("#2D3748"), 
+        spaceAfter=12
+    )
+    
+    story = []
+    story.append(Paragraph(f"<b>Application Document: Cover Letter</b>", title_style))
+    story.append(Paragraph(f"<b>Candidate Profile Reference:</b> {candidate_name}", body_style))
+    story.append(Paragraph(f"<b>Evaluated Opening:</b> {job_title}", body_style))
+    story.append(Spacer(1, 15))
+    
+    for paragraph in document_body.split("\n\n"):
+        clean_paragraph = paragraph.strip().replace("\n", "<br/>")
+        if clean_paragraph:
+            story.append(Paragraph(clean_paragraph, body_style))
+            
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
