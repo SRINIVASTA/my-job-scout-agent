@@ -1,16 +1,24 @@
 from langgraph.graph import StateGraph, START, END
 from schemas import AgentState
-from nodes import extract_profile_node, generate_query_node, fetch_jobs_node, rank_jobs_node, generate_cover_letters_node
+from nodes import (
+    extract_profile_node, 
+    generate_query_node, 
+    fetch_jobs_node, 
+    rank_jobs_node, 
+    generate_cover_letters_node
+)
 
 def build_workflow():
     workflow = StateGraph(AgentState)
 
+    # 1. Map graph node identifiers to functions
     workflow.add_node("extract_profile", extract_profile_node)
     workflow.add_node("generate_query", generate_query_node)
     workflow.add_node("fetch_jobs", fetch_jobs_node)
     workflow.add_node("rank_jobs", rank_jobs_node)
     workflow.add_node("generate_cover_letters", generate_cover_letters_node)
 
+    # 2. Wire sequential framework routing links
     workflow.add_edge(START, "extract_profile")
     workflow.add_edge("extract_profile", "generate_query")
     workflow.add_edge("generate_query", "fetch_jobs")
