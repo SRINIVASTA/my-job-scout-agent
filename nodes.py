@@ -85,7 +85,8 @@ def generate_query_node(state: AgentState):
     llm = get_hf_llm(state)
     messages = [HumanMessage(content=prompt)]
     response = llm.invoke(messages).content.strip()
-    clean_query = response.replace("'", "").replace('"', "").split("\n").strip()
+    # 🕵️‍♂️ FIXED STRIP ORDER LOGIC OVER THE CONVERTED STRING COMPONENT 
+    clean_query = response.replace("'", "").replace('"', "").split("\n")[0].strip()
     return {"search_query": clean_query}
 def fetch_jobs_node(state: AgentState):
     search_keyword = state.search_query.strip() if state.search_query else "developer"
