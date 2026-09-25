@@ -19,6 +19,15 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### ⚙️ Workflow Configuration")
+    
+    # ⏱️ NEW LIVE HORIZON TIME WINDOW SELECTION TOOL
+    selected_time_window = st.selectbox(
+        "Scrape Live Postings Within:",
+        options=["Within 1 Hour", "Past 24 Hours", "Past 3 Days"],
+        index=2,
+        help="Filters live Firecrawl web crawl targets to match your exact application timeline."
+    )
+    
     match_threshold = st.slider(
         "Minimum Fit Score Threshold (%)",
         min_value=0, max_value=100, value=70, step=5,
@@ -28,7 +37,7 @@ with st.sidebar:
     st.caption("Robust Fallback Enabled Engine 🦜🔗")
 
 st.title("🤖 Live LangGraph & Gemini Job Matching Agent")
-st.markdown("Tracking live opportunities with threshold-highlighted dashboards and professional tailored report extractions.")
+st.markdown("Tracking opportunities with threshold-highlighted dashboards and professional tailored report extractions.")
 
 # Verify that at least one functional text-processing token configuration exists
 if not google_key and not hf_token:
@@ -60,11 +69,12 @@ if uploaded_file is not None:
         if hf_token:
             os.environ["HF_TOKEN"] = hf_token
             
-        with st.spinner("Orchestrating multi-agent graph nodes (Extraction -> Firecrawl Search -> Ranking -> Generation)..."):
+        with st.spinner(f"Orchestrating graph nodes with Firecrawl query filtered to {selected_time_window}..."):
             try:
                 initial_state = {
                     "cv_text": raw_cv_text,
                     "match_threshold": match_threshold,
+                    "time_filter": selected_time_window.lower(), # Sends chosen timeline choice downstream
                     "google_api_key": google_key,
                     "hf_token": hf_token,
                     "firecrawl_api_key": firecrawl_key,
@@ -120,12 +130,22 @@ if uploaded_file is not None:
                                     with st.expander("📄 View Tailored Cover Letter Content"):
                                         st.text_area(label="Raw Output Copy", value=target_letter, height=250, key=f"txt_{index}")
                                         
+                                        # Text and PDF generation hooks inside the expanded cards:
                                         candidate_name = getattr(profile, 'name', 'Candidate')
                                         job_title = getattr(score_card, 'job_title', 'Target Role')
-                                        pdf_data = generate_pdf_document(candidate_name, job_title, target_letter)
                                         clean_title = job_title.replace(" ", "_").lower()
                                         
-                                        # 📥 EXCLUSIVE PDF COMPILATION EXPORT BUTTON
+                                        # Utility 1: Text format download
+                                        st.download_button(
+                                            label="📥 Download Cover Letter (.txt)",
+                                            data=target_letter,
+                                            file_name=f"cover_letter_{clean_title}.txt",
+                                            mime="text/plain",
+                                            key=f"txt_dl_{index}"
+                                        )
+                                        
+                                        # Utility 2: Production PDF format download
+                                        pdf_data = generate_pdf_document(candidate_name, job_title, target_letter)
                                         st.download_button(
                                             label="📥 Download Cover Letter (PDF Only)",
                                             data=pdf_data,
