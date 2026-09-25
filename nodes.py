@@ -52,7 +52,7 @@ def extract_profile_node(state: AgentState):
     
     try:
         response = llm.invoke(messages).content.strip()
-        cleaned_json = response.split("```json")[-1].split("```")[0].strip() if "```" in response else response
+        cleaned_json = response.split("```json")[-1].split("```").strip() if "```" in response else response
         data = json.loads(cleaned_json)
         return {"profile": CandidateProfile(
             name=data.get("name", "Unknown Candidate"),
@@ -95,8 +95,9 @@ def fetch_jobs_node(state: AgentState):
     if state.firecrawl_api_key:
         try:
             app = FirecrawlApp(api_key=state.firecrawl_api_key)
+            # Optimized broad internet search query string
             search_result = app.search(
-                query=f'"{search_keyword}" jobs remote hiring 2026',
+                query=f'"{search_keyword}" remote jobs hiring',
                 params={"limit": 3}
             )
             
@@ -159,7 +160,7 @@ def rank_jobs_node(state: AgentState):
                     HumanMessage(content=prompt)
                 ]
                 response = llm.invoke(messages).content.strip()
-                cleaned_json = response.split("```json")[-1].split("```")[0].strip() if "```" in response else response
+                cleaned_json = response.split("```json")[-1].split("```").strip() if "```" in response else response
                 data = json.loads(cleaned_json)
                 score = int(data.get("fit_score", 50))
                 rankings.append(JobMatchScore(
@@ -204,14 +205,6 @@ def generate_cover_letters_node(state: AgentState):
                     print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
 
             # Fallback to Hugging Face
-            if not letter_written:
-                try:
-                    llm = get_gemini_llm()
-                    draft = llm.invoke(writer_prompt).content.strip()
-                    drafted_letters[score_card.job_id] = draft
-                    letter_written = True
-                except Exception as e:
-                    print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
 
             # Fallback to Hugging Face
             if not letter_written:
