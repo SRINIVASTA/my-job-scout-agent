@@ -1,7 +1,8 @@
 import os
 import json
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEndpoint
+from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_core.messages import HumanMessage, SystemMessage
 from firecrawl import FirecrawlApp
 from schemas import AgentState, CandidateProfile, JobMatchScore
 
@@ -11,16 +12,18 @@ def get_gemini_llm():
 
 def get_hf_llm(state: AgentState):
     """
-    Helper to return a Hugging Face serverless execution model.
-    Switched model to Qwen2.5-Coder-7B-Instruct to guarantee text-generation task support.
+    Helper to return a Hugging Face serverless execution model wrapped in ChatHuggingFace.
+    This resolves the 'conversational' task requirement by routing through chat message formats.
     """
     if state.hf_token:
-        return HuggingFaceEndpoint(
+        # Define base endpoint as conversational to match provider routing rules
+        base_llm = HuggingFaceEndpoint(
             repo_id="Qwen/Qwen2.5-Coder-7B-Instruct",
-            task="text-generation",
+            task="conversational",
             temperature=0.1,
             huggingfacehub_api_token=state.hf_token
         )
+        return ChatHuggingFace(llm=base_llm)
     raise RuntimeError("Critical: Gemini failed and Hugging Face token is missing in state.")
 
 def extract_profile_node(state: AgentState):
@@ -38,16 +41,17 @@ def extract_profile_node(state: AgentState):
 
     # Fallback to Hugging Face
     llm = get_hf_llm(state)
-    hf_prompt = (
-        f"<|im_start|>system\n"
-        f"You are a strict data-formatting AI tool. You must respond ONLY with a valid raw JSON object matching this schema:\n"
-        f"{{\"name\": \"string\", \"skills\": [\"string\"], \"experience_summary\": \"string\"}}\n"
-        f"Do not include markdown tags, preamble text, or explanations.<|im_end|>\n"
-        f"<|im_start|>user\n{prompt}<|im_end|>\n"
-        f"<|im_start|>assistant\n"
-    )
-    response = llm.invoke(hf_prompt).strip()
+    messages = [
+        SystemMessage(content=(
+            "You are a strict data-formatting AI tool. You must respond ONLY with a valid raw JSON object matching this schema exactly:\n"
+            "{\"name\": \"string\", \"skills\": [\"string\"], \"experience_summary\": \"string\"}\n"
+            "Do not include markdown tags like ```json, preamble text, or explanations."
+        )),
+        HumanMessage(content=prompt)
+    ]
+    
     try:
+        response = llm.invoke(messages).content.strip()
         cleaned_json = response.split("```json")[-1].split("```")[0].strip() if "```" in response else response
         data = json.loads(cleaned_json)
         return {"profile": CandidateProfile(
@@ -55,7 +59,8 @@ def extract_profile_node(state: AgentState):
             skills=data.get("skills", []),
             experience_summary=data.get("experience_summary", "N/A")
         )}
-    except Exception:
+    except Exception as fallback_err:
+        print(f"❌ Fallback parsing failed: {fallback_err}")
         return {"profile": CandidateProfile(name="Backup Candidate Extraction", skills=["Python"], experience_summary="Extracted via fallback model line.")}
 
 def generate_query_node(state: AgentState):
@@ -79,9 +84,9 @@ def generate_query_node(state: AgentState):
 
     # Fallback to Hugging Face
     llm = get_hf_llm(state)
-    hf_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
-    response = llm.invoke(hf_prompt)
-    clean_query = response.strip().replace("'", "").replace('"', "").split("\n")[0]
+    messages = [HumanMessage(content=prompt)]
+    response = llm.invoke(messages).content.strip()
+    clean_query = response.replace("'", "").replace('"', "").split("\n")[0].strip()
     return {"search_query": clean_query}
 
 def fetch_jobs_node(state: AgentState):
@@ -143,17 +148,17 @@ def rank_jobs_node(state: AgentState):
 
         # Fallback to Hugging Face if Gemini wasn't run/failed
         if not evaluated:
-            llm = get_hf_llm(state)
-            hf_prompt = (
-                f"<|im_start|>system\n"
-                f"You are an evaluator. Output ONLY valid raw JSON matching this structure exactly:\n"
-                f"{{\"fit_score\": 85, \"gap_explanation\": \"Missing explicit documentation detail rules\"}}\n"
-                f"Do not write markdown tags.<|im_end|>\n"
-                f"<|im_start|>user\n{prompt}<|im_end|>\n"
-                f"<|im_start|>assistant\n"
-            )
             try:
-                response = llm.invoke(hf_prompt).strip()
+                llm = get_hf_llm(state)
+                messages = [
+                    SystemMessage(content=(
+                        "You are a strict evaluator. Output ONLY a valid raw JSON object matching this structure exactly:\n"
+                        "{\"fit_score\": 85, \"gap_explanation\": \"Missing explicit details\"}\n"
+                        "Do not include markdown tags like ```json or trailing text symbols."
+                    )),
+                    HumanMessage(content=prompt)
+                ]
+                response = llm.invoke(messages).content.strip()
                 cleaned_json = response.split("```json")[-1].split("```")[0].strip() if "```" in response else response
                 data = json.loads(cleaned_json)
                 score = int(data.get("fit_score", 50))
@@ -164,7 +169,8 @@ def rank_jobs_node(state: AgentState):
                     gap_explanation=data.get("gap_explanation", "Evaluated via text pipeline alternative."),
                     threshold_passed=True if score >= current_threshold else False
                 ))
-            except Exception:
+            except Exception as rank_err:
+                print(f"⚠️ HF Rank sub-parse error: {rank_err}")
                 rankings.append(JobMatchScore(job_id=job['id'], job_title=job['title'], fit_score=60, gap_explanation="Fallback parser default.", threshold_passed=False))
                 
     return {"ranked_jobs": rankings}
@@ -189,6 +195,16 @@ def generate_cover_letters_node(state: AgentState):
             letter_written = False
             # Try Gemini First
             if state.google_api_key:
+                try:
+                    llm = get_gemini_llm()
+                    draft = llm.invoke(writer_prompt).content.strip()
+                    drafted_letters[score_card.job_id] = draft
+                    letter_written = True
+                except Exception as e:
+                    print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
+
+            # Fallback to Hugging Face
+            if not letter_written:
                 try:
                     llm = get_gemini_llm()
                     draft = llm.invoke(writer_prompt).content.strip()
