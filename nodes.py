@@ -13,14 +13,16 @@ def get_gemini_llm():
 def get_hf_llm(state: AgentState):
     """
     Helper to return a Hugging Face serverless execution model wrapped in ChatHuggingFace.
-    This resolves the 'conversational' task requirement by routing through chat message formats.
+    Added max_new_tokens parameter to resolve cover letter text truncation issues.
     """
     if state.hf_token:
         base_llm = HuggingFaceEndpoint(
             repo_id="Qwen/Qwen2.5-Coder-7B-Instruct",
             task="conversational",
             temperature=0.1,
-            huggingfacehub_api_token=state.hf_token
+            huggingfacehub_api_token=state.hf_token,
+            # 🚀 FIXED: Allow the model to write longer text bodies without cutting off
+            max_new_tokens=2048 
         )
         return ChatHuggingFace(llm=base_llm)
     raise RuntimeError("Critical: Gemini failed and Hugging Face token is missing in state.")
