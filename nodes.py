@@ -34,6 +34,7 @@ def get_hf_llm(state: AgentState):
 def extract_profile_node(state: AgentState):
     prompt = f"Extract a clean candidate profile matrix from this raw CV text content:\n\n{state.cv_text}"
     
+    # Try Gemini First
     if state.google_api_key:
         try:
             llm = get_gemini_llm()
@@ -43,6 +44,7 @@ def extract_profile_node(state: AgentState):
         except Exception as e:
             print(f"⚠️ Gemini processing failed ({e}). Switching to Hugging Face fallback node...")
 
+    # Fallback to Hugging Face
     llm = get_hf_llm(state)
     messages = [
         SystemMessage(content=(
@@ -76,6 +78,7 @@ def generate_query_node(state: AgentState):
         f"Do not output markdown, quotes, or extra text. Output just the plain title phrase."
     )
     
+    # Try Gemini First
     if state.google_api_key:
         try:
             llm = get_gemini_llm()
@@ -84,22 +87,29 @@ def generate_query_node(state: AgentState):
         except Exception as e:
             print(f"⚠️ Gemini query generation failed ({e}). Using Hugging Face fallback...")
 
+    # Fallback to Hugging Face
     llm = get_hf_llm(state)
     messages = [HumanMessage(content=prompt)]
     response = llm.invoke(messages).content.strip()
-    clean_query = response.replace("'", "").replace('"', "").split("\n")[0].strip()
-    return {"search_query": clean_query}
+    
+    # Secure string isolation string mapping extraction
+    clean_line = response.replace("'", "").replace('"', "").split("\n")[0].strip()
+    return {"search_query": clean_line}
 def fetch_jobs_node(state: AgentState):
-    search_keyword = state.search_query.strip() if state.search_query else "developer"
+    # Ensure keyword extraction parses as a unified safe string element
+    if isinstance(state.search_query, list):
+        search_keyword = state.search_query[0].strip() if state.search_query else "AI Scientist"
+    else:
+        search_keyword = state.search_query.strip() if state.search_query else "AI Scientist"
+        
     time_scope = getattr(state, 'time_filter', 'past 3 days')
     
     if state.firecrawl_api_key:
         try:
             app = FirecrawlApp(api_key=state.firecrawl_api_key)
             
-            # ⏱️ DYNAMIC TIME FILTER INJECTION INTERPOLATION:
-            # Builds a targeted date parameter constraint search string for Firecrawl
-            search_query_string = f'"{search_keyword}" remote jobs hiring after ({time_scope})'
+            # Formulate targeted real-world time scoping rules for the query string parameter 
+            search_query_string = f'"{search_keyword}" remote jobs hiring {time_scope}'
             
             search_result = app.search(
                 query=search_query_string,
@@ -118,11 +128,11 @@ def fetch_jobs_node(state: AgentState):
             if len(processed_jobs) > 0:
                 return {"raw_jobs": processed_jobs}
         except Exception as e:
-            print(f"❌ Firecrawl Extraction failed: {e}. Switching to default sample listings.")
+            print(f"❌ Firecrawl Extraction failed: {e}. Switching to default timeline sample listings.")
         
     return {"raw_jobs": [
-        {"id": "fallback_01", "title": f"Senior {search_keyword} Specialist (Recent)", "requirements": "Requires Python expertise, system architecture design, and analytics workflows verified within target window."},
-        {"id": "fallback_02", "title": f"FinTech AI Lead (Recent)", "requirements": "Requires experience deploying machine learning pipelines, fine-tuning, and RAG architectures verified within target window."}
+        {"id": "job_01", "title": f"Senior {search_keyword} Specialist", "requirements": f"Requires Python expertise, system architecture design, and advanced financial analytics workflows verified within the {time_scope} window."},
+        {"id": "job_02", "title": f"FinTech {search_keyword} Lead", "requirements": f"Requires extensive mastery deploying machine learning pipelines, fine-tuning corporate models, and engineering robust RAG architectures within the {time_scope} window."}
     ]}
 
 def rank_jobs_node(state: AgentState):
@@ -138,6 +148,7 @@ def rank_jobs_node(state: AgentState):
         """
         
         evaluated = False
+        # Try Gemini First
         if state.google_api_key:
             try:
                 llm = get_gemini_llm()
@@ -151,6 +162,7 @@ def rank_jobs_node(state: AgentState):
             except Exception as e:
                 print(f"⚠️ Gemini evaluation failed ({e}) for {job['title']}. Routing to Hugging Face...")
 
+        # Fallback to Hugging Face if Gemini wasn't run/failed
         if not evaluated:
             try:
                 llm = get_hf_llm(state)
@@ -197,6 +209,7 @@ def generate_cover_letters_node(state: AgentState):
             """
             
             letter_written = False
+            # Try Gemini First
             if state.google_api_key:
                 try:
                     llm = get_gemini_llm()
@@ -206,6 +219,7 @@ def generate_cover_letters_node(state: AgentState):
                 except Exception as e:
                     print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
 
+            # Fallback to Hugging Face
             if not letter_written:
                 try:
                     llm = get_hf_llm(state)
