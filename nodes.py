@@ -34,7 +34,6 @@ def get_hf_llm(state: AgentState):
 def extract_profile_node(state: AgentState):
     prompt = f"Extract a clean candidate profile matrix from this raw CV text content:\n\n{state.cv_text}"
     
-    # Try Gemini First
     if state.google_api_key:
         try:
             llm = get_gemini_llm()
@@ -44,7 +43,6 @@ def extract_profile_node(state: AgentState):
         except Exception as e:
             print(f"⚠️ Gemini processing failed ({e}). Switching to Hugging Face fallback node...")
 
-    # Fallback to Hugging Face
     llm = get_hf_llm(state)
     messages = [
         SystemMessage(content=(
@@ -78,7 +76,6 @@ def generate_query_node(state: AgentState):
         f"Do not output markdown, quotes, or extra text. Output just the plain title phrase."
     )
     
-    # Try Gemini First
     if state.google_api_key:
         try:
             llm = get_gemini_llm()
@@ -87,7 +84,6 @@ def generate_query_node(state: AgentState):
         except Exception as e:
             print(f"⚠️ Gemini query generation failed ({e}). Using Hugging Face fallback...")
 
-    # Fallback to Hugging Face
     llm = get_hf_llm(state)
     messages = [HumanMessage(content=prompt)]
     response = llm.invoke(messages).content.strip()
@@ -95,12 +91,18 @@ def generate_query_node(state: AgentState):
     return {"search_query": clean_query}
 def fetch_jobs_node(state: AgentState):
     search_keyword = state.search_query.strip() if state.search_query else "developer"
+    time_scope = getattr(state, 'time_filter', 'past 3 days')
     
     if state.firecrawl_api_key:
         try:
             app = FirecrawlApp(api_key=state.firecrawl_api_key)
+            
+            # ⏱️ DYNAMIC TIME FILTER INJECTION INTERPOLATION:
+            # Builds a targeted date parameter constraint search string for Firecrawl
+            search_query_string = f'"{search_keyword}" remote jobs hiring after ({time_scope})'
+            
             search_result = app.search(
-                query=f'"{search_keyword}" remote jobs hiring',
+                query=search_query_string,
                 params={"limit": 3}
             )
             
@@ -119,8 +121,8 @@ def fetch_jobs_node(state: AgentState):
             print(f"❌ Firecrawl Extraction failed: {e}. Switching to default sample listings.")
         
     return {"raw_jobs": [
-        {"id": "fallback_01", "title": f"Senior {search_keyword} Engineer", "requirements": "Requires Python expertise, system architecture design, and LLM orchestration workflows."},
-        {"id": "fallback_02", "title": f"AI Solutions Specialist", "requirements": "Requires experience deploying machine learning pipelines, fine-tuning, and RAG architectures."}
+        {"id": "fallback_01", "title": f"Senior {search_keyword} Specialist (Recent)", "requirements": "Requires Python expertise, system architecture design, and analytics workflows verified within target window."},
+        {"id": "fallback_02", "title": f"FinTech AI Lead (Recent)", "requirements": "Requires experience deploying machine learning pipelines, fine-tuning, and RAG architectures verified within target window."}
     ]}
 
 def rank_jobs_node(state: AgentState):
@@ -136,7 +138,6 @@ def rank_jobs_node(state: AgentState):
         """
         
         evaluated = False
-        # Try Gemini First
         if state.google_api_key:
             try:
                 llm = get_gemini_llm()
@@ -150,7 +151,6 @@ def rank_jobs_node(state: AgentState):
             except Exception as e:
                 print(f"⚠️ Gemini evaluation failed ({e}) for {job['title']}. Routing to Hugging Face...")
 
-        # Fallback to Hugging Face if Gemini wasn't run/failed
         if not evaluated:
             try:
                 llm = get_hf_llm(state)
@@ -197,7 +197,6 @@ def generate_cover_letters_node(state: AgentState):
             """
             
             letter_written = False
-            # Try Gemini First
             if state.google_api_key:
                 try:
                     llm = get_gemini_llm()
@@ -207,7 +206,6 @@ def generate_cover_letters_node(state: AgentState):
                 except Exception as e:
                     print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
 
-            # Fallback to Hugging Face
             if not letter_written:
                 try:
                     llm = get_hf_llm(state)
@@ -241,24 +239,24 @@ def generate_pdf_document(candidate_name: str, job_title: str, document_body: st
     title_style = ParagraphStyle(
         'DocTitle', 
         parent=styles['Heading1'], 
-        fontSize=20, 
-        leading=24, 
+        fontSize=18, 
+        leading=22, 
         textColor=colors.HexColor("#1A365D"), 
         spaceAfter=15
     )
     body_style = ParagraphStyle(
         'DocBody', 
         parent=styles['Normal'], 
-        fontSize=10.5, 
-        leading=16, 
+        fontSize=10, 
+        leading=15, 
         textColor=colors.HexColor("#2D3748"), 
         spaceAfter=12
     )
     
     story = []
-    story.append(Paragraph(f"<b>Application Document: Cover Letter</b>", title_style))
-    story.append(Paragraph(f"<b>Candidate Profile Reference:</b> {candidate_name}", body_style))
-    story.append(Paragraph(f"<b>Evaluated Opening:</b> {job_title}", body_style))
+    story.append(Paragraph(f"<b>Application Document: Tailored Cover Letter</b>", title_style))
+    story.append(Paragraph(f"<b>Candidate Reference Name:</b> {candidate_name}", body_style))
+    story.append(Paragraph(f"<b>Evaluated Posting Title:</b> {job_title}", body_style))
     story.append(Spacer(1, 15))
     
     for paragraph in document_body.split("\n\n"):
