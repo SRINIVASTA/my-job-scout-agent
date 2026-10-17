@@ -11,7 +11,7 @@ from nodes import (
 )
 
 def determine_next_step(state: AgentState):
-    """Evaluates the structural approval flag state downstream."""
+    """Conditional router that checks the validation state feedback."""
     if state.approved:
         return "compile_latex"
     return "drafter_agent"
@@ -19,25 +19,25 @@ def determine_next_step(state: AgentState):
 def build_workflow():
     workflow = StateGraph(AgentState)
 
-    # Core Pipeline Nodes
+    # Ingest Core Components
     workflow.add_node("extract_profile", extract_profile_node)
     workflow.add_node("generate_query", generate_query_node)
     workflow.add_node("fetch_jobs", fetch_jobs_node)
     workflow.add_node("rank_jobs", rank_jobs_node)
     
-    # Target Application Agent Sub-Loops
+    # Agent Logic Verification Setup
     workflow.add_node("drafter_agent", drafter_agent_node)
     workflow.add_node("reviewer_agent", reviewer_agent_node)
     workflow.add_node("compile_latex", compile_latex_node)
 
-    # Core Pipeline Transitions
+    # Sequential Edge Triggers
     workflow.add_edge(START, "extract_profile")
     workflow.add_edge("extract_profile", "generate_query")
     workflow.add_edge("generate_query", "fetch_jobs")
     workflow.add_edge("fetch_jobs", "rank_jobs")
     workflow.add_edge("rank_jobs", "drafter_agent")
     
-    # Agent Validation Sequence Loop Connection Points
+    # Cyclical Multi-Agent Loop Connections
     workflow.add_edge("drafter_agent", "reviewer_agent")
     workflow.add_conditional_edges(
         "reviewer_agent",
