@@ -198,7 +198,7 @@ def drafter_agent_node(state: AgentState):
     Return ONLY valid, raw, compilation-ready LaTeX syntax code. 
     Include standard document structural markers like '\\documentclass{{article}}\(', '\begin{{document}}', and '\end\){{document}}'.
     Ensure that special reserved layout characters like %, &, \$, and _ are properly escaped.
-    Do NOT warp code segments within markdown block structures like ```latex. Begin immediately with '\\documentclass'.
+    Do NOT wrap code segments within markdown block structures like ```latex. Begin immediately with '\\documentclass'.
     """
     
     google_key = state.google_api_key if state.google_api_key else st.secrets.get("GOOGLE_API_KEY", "")
@@ -210,7 +210,6 @@ def drafter_agent_node(state: AgentState):
     if response.startswith("```"):
         response = response.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     return {"drafted_latex": response}
-
 def reviewer_agent_node(state: AgentState):
     """Reviewer Agent: Checks text layout outputs against system rules criteria."""
     if not state.drafted_latex:
