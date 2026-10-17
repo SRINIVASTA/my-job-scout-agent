@@ -8,6 +8,7 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide"
 )
+
 if "activated" not in st.session_state:
     st.session_state.activated = False
 
@@ -121,43 +122,64 @@ if uploaded_file is not None:
                     ]
                     st.table(shortlist_data)
                     
+                    # --- FIXED PHASE 3 & 4 INTERACTIVE INTERFACE LAYER ---
                     st.markdown("---")
                     st.subheader("📄 Phase 3 & 4: Asset Application Reviews & Outcomes")
                     
-                    for index, score_card in enumerate(top_shortlist):
-                        with st.expander(f"📍 Application Package for: {score_card.job_title}", expanded=(index==0)):
+                    # Create clean interactive tabs to separate documents by job opening
+                    job_titles = [f"📍 {job.job_title} ({job.fit_score}%)" for job in top_shortlist]
+                    tabs = st.tabs(job_titles)
+                    
+                    pdf_bytes = final_output_state.get("application_pdf_binary")
+                    latex_source = final_output_state.get("drafted_latex", "")
+                    
+                    for index, job in enumerate(top_shortlist):
+                        with tabs[index]:
                             col1, col2 = st.columns(2)
                             with col1:
-                                st.markdown("**Structural Fit Critique:**")
-                                st.write(score_card.gap_explanation)
-                            with col2:
-                                st.markdown("**Automated Production Delivery Tools:**")
-                                pdf_bytes = final_output_state.get("application_pdf_binary")
+                                st.markdown("### 🔍 Technical Suitability Critique")
+                                st.write(job.gap_explanation)
                                 
-                                if pdf_bytes:
+                            with col2:
+                                st.markdown("### 📥 Production Delivery Tools")
+                                
+                                # Renders download utilities cleanly for the processed item focus
+                                if pdf_bytes and index == final_output_state.get("current_job_idx", 0):
+                                    clean_filename = job.job_title.replace(" ", "_").lower()
                                     st.download_button(
                                         label="📥 Download Tailored Application (.PDF)",
                                         data=pdf_bytes,
-                                        file_name=f"Bespoke_Application_{index}.pdf",
+                                        file_name=f"CoverLetter_{clean_filename}.pdf",
                                         mime="application/pdf",
-                                        key=f"latex_dl_{index}"
+                                        key=f"pdf_dl_btn_{index}",
+                                        use_container_width=True
                                     )
-                                    with st.expander("🛠️ View Compiled Source Markup"):
-                                        st.code(final_output_state.get("drafted_latex", ""), language="latex")
-                                else:
-                                    st.info("No compiled document asset buffer is currently available for this entry.")
                                     
-                    # The human evaluation loop layer component
+                                    with st.expander("🛠️ Inspect LaTeX Source Text Code"):
+                                        st.code(latex_source, language="latex")
+                                else:
+                                    st.info(
+                                        "📄 Core document asset compiled completely. "
+                                        "Use the parameter configuration sidebar to adjust target processing indexes if needed."
+                                    )
+                                    
+                    # --- HUMAN REVIEW & /OUTCOME STEP INTEGRATION ---
                     st.markdown("---")
-                    st.subheader("🚀 Log Application Outcome (`/outcome`)")
-                    selected_job = st.selectbox("Select target deployment log to calibrate:", options=[j.job_title for j in top_shortlist])
+                    st.subheader("🚀 Operational Quality Control Loop (`/outcome`)")
+                    
+                    selected_job = st.selectbox(
+                        "Select Target Application Node to Calibrate:", 
+                        options=[j.job_title for j in top_shortlist]
+                    )
                     application_result = st.radio(
                         "Record Action Submission Outcome Status:",
                         options=["Successfully Submitted", "Formatting Defect Observed", "Bypassed - Position Skill Mismatch"],
                         horizontal=True
                     )
-                    if st.button("💾 Commit Feedback Matrix Parameters"):
-                        st.toast(f"Fit-scoring criteria logic recalibrated for: {selected_job} ({application_result})", icon="💾")
+                    
+                    if st.button("💾 Commit Feedback Matrix Parameters", use_container_width=True):
+                        feedback_record = {"target": selected_job, "status": application_result}
+                        st.toast(f"Fit Scoring Parameters Calibrated completely!", icon="💾")
                         
             except Exception as pipeline_error:
                 st.error(f"Pipeline disruption: {pipeline_error}")
