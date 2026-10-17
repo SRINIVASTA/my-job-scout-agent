@@ -1,26 +1,20 @@
 import os
 import json
 import io
-import streamlit as st  # Imported to connect directly to the dynamic secrets manager memory spaces
+import subprocess
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.messages import HumanMessage, SystemMessage
 from firecrawl import FirecrawlApp
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
 from schemas import AgentState, CandidateProfile, JobMatchScore
 
 def get_gemini_llm():
-    """Helper to return a Gemini model instance."""
+    """Returns a primary Gemini LLM instance."""
     return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 def get_hf_llm(state: AgentState):
-    """
-    Helper to return a Hugging Face serverless model instance.
-    Falls back to read the token right out of Streamlit secrets if state value isn't bound.
-    """
+    """Returns a serverless Hugging Face chat context instance as a fallback option."""
     token = state.hf_token if state.hf_token else st.secrets.get("HF_TOKEN", "")
     if token:
         base_llm = HuggingFaceEndpoint(
@@ -31,9 +25,10 @@ def get_hf_llm(state: AgentState):
             max_new_tokens=2048
         )
         return ChatHuggingFace(llm=base_llm)
-    raise RuntimeError("Critical Error: Fallback triggered but Hugging Face token is missing inside secrets.toml.")
+    raise RuntimeError("Hugging Face API token is missing inside your configurations.")
 
 def extract_profile_node(state: AgentState):
+    """Parses raw text data to build structured candidate profile metadata blocks."""
     prompt = f"Extract a clean candidate profile matrix from this raw CV text content:\n\n{state.cv_text}"
     google_key = state.google_api_key if state.google_api_key else st.secrets.get("GOOGLE_API_KEY", "")
     
@@ -44,7 +39,7 @@ def extract_profile_node(state: AgentState):
             extracted_data = structured_gemini.invoke(prompt)
             return {"profile": extracted_data}
         except Exception as e:
-            print(f"⚠️ Gemini processing failed ({e}). Switching to Hugging Face fallback node...")
+            print(f"⚠️ Gemini execution failed ({e}). Re-routing to fallback...")
 
     llm = get_hf_llm(state)
     messages = [
@@ -66,10 +61,11 @@ def extract_profile_node(state: AgentState):
             experience_summary=data.get("experience_summary", "N/A")
         )}
     except Exception as fallback_err:
-        print(f"❌ Fallback parsing failed: {fallback_err}")
-        return {"profile": CandidateProfile(name="Backup Candidate Extraction", skills=["Python"], experience_summary="Extracted via fallback model line.")}
+        print(f"❌ Fallback processing failed: {fallback_err}")
+        return {"profile": CandidateProfile(name="Backup Candidate Extraction", skills=["Python"], experience_summary="Processed via fallback infrastructure.")}
 
 def generate_query_node(state: AgentState):
+    """Generates optimized job-board query terms from candidate attributes."""
     prompt = (
         f"You are an expert recruiter. Read this candidate's background and skills:\n"
         f"Background: {state.profile.experience_summary}\n"
@@ -86,14 +82,16 @@ def generate_query_node(state: AgentState):
             query_response = llm.invoke(prompt)
             return {"search_query": query_response.content.strip().replace("'", "").replace('"', "")}
         except Exception as e:
-            print(f"⚠️ Gemini query generation failed ({e}). Using Hugging Face fallback...")
+            print(f"⚠️ Gemini context construction failed ({e}). Re-routing to fallback...")
 
     llm = get_hf_llm(state)
     messages = [HumanMessage(content=prompt)]
     response = llm.invoke(messages).content.strip()
     clean_query = response.replace("'", "").replace('"', "").split("\n")[0].strip()
     return {"search_query": clean_query}
+
 def fetch_jobs_node(state: AgentState):
+    """Queries live data platforms using Firecrawl search configurations."""
     search_keyword = state.search_query.strip() if state.search_query else "AI Scientist"
     time_scope = getattr(state, 'time_filter', 'past 3 days')
     firecrawl_key = state.firecrawl_api_key if state.firecrawl_api_key else st.secrets.get("FIRECRAWL_API_KEY", "")
@@ -102,11 +100,7 @@ def fetch_jobs_node(state: AgentState):
         try:
             app = FirecrawlApp(api_key=firecrawl_key)
             search_query_string = f'"{search_keyword}" remote jobs hiring {time_scope}'
-            
-            search_result = app.search(
-                query=search_query_string,
-                params={"limit": 3}
-            )
+            search_result = app.search(query=search_query_string, params={"limit": 3})
             
             processed_jobs = []
             if search_result and 'data' in search_result:
@@ -116,19 +110,19 @@ def fetch_jobs_node(state: AgentState):
                         "title": item.get("title", f"{search_keyword} Role"),
                         "requirements": f"Source: {item.get('url')}. Content Snippet: {item.get('markdown', '')[:1000]}"
                     })
-            
             if len(processed_jobs) > 0:
                 return {"raw_jobs": processed_jobs}
         except Exception as e:
-            print(f"❌ Firecrawl Extraction failed: {e}. Switching to default timeline sample listings.")
+            print(f"❌ Firecrawl script failure: {e}. Utilizing fallback sample entries.")
         
     return {"raw_jobs": [
         {"id": "job_01", "title": f"Senior {search_keyword} Specialist", "requirements": f"Requires Python expertise, system architecture design, and advanced financial analytics workflows verified within the {time_scope} window."},
         {"id": "job_02", "title": f"FinTech {search_keyword} Lead", "requirements": f"Requires extensive mastery deploying machine learning pipelines, fine-tuning corporate models, and engineering robust RAG architectures within the {time_scope} window."}
     ]}
-
 def rank_jobs_node(state: AgentState):
+    """Evaluates suitability indexes and creates the structured shortlist."""
     rankings = []
+    shortlist = []
     current_threshold = getattr(state, 'match_threshold', 70)
     google_key = state.google_api_key if state.google_api_key else st.secrets.get("GOOGLE_API_KEY", "")
     
@@ -139,7 +133,6 @@ def rank_jobs_node(state: AgentState):
         Job Data context: {job['requirements']}
         Calculate a matching accuracy score from 0 to 100. Provide a detailed critique explanation on what skills the candidate is completely missing for this job.
         """
-        
         evaluated = False
         if google_key:
             try:
@@ -150,9 +143,11 @@ def rank_jobs_node(state: AgentState):
                 score_card.job_title = job['title']
                 score_card.threshold_passed = True if score_card.fit_score >= current_threshold else False
                 rankings.append(score_card)
+                if score_card.threshold_passed:
+                    shortlist.append(score_card)
                 evaluated = True
             except Exception as e:
-                print(f"⚠️ Gemini evaluation failed ({e}) for {job['title']}. Routing to Hugging Face...")
+                print(f"⚠️ Gemini ranking failed for {job['title']}. Routing to fallback...")
 
         if not evaluated:
             try:
@@ -169,105 +164,102 @@ def rank_jobs_node(state: AgentState):
                 cleaned_json = response.split("```json")[-1].split("```").strip() if "```" in response else response
                 data = json.loads(cleaned_json)
                 score = int(data.get("fit_score", 50))
-                rankings.append(JobMatchScore(
+                score_card = JobMatchScore(
                     job_id=job['id'],
                     job_title=job['title'],
                     fit_score=score,
                     gap_explanation=data.get("gap_explanation", "Evaluated via text pipeline alternative."),
                     threshold_passed=True if score >= current_threshold else False
-                ))
+                )
+                rankings.append(score_card)
+                if score_card.threshold_passed:
+                    shortlist.append(score_card)
             except Exception as rank_err:
-                print(f"⚠️ HF Rank sub-parse error: {rank_err}")
-                rankings.append(JobMatchScore(job_id=job['id'], job_title=job['title'], fit_score=60, gap_explanation="Fallback parser default.", threshold_passed=False))
+                print(f"⚠️ Fallback evaluation exception: {rank_err}")
                 
-    return {"ranked_jobs": rankings}
+    shortlist.sort(key=lambda x: x.fit_score, reverse=True)
+    return {"ranked_jobs": rankings, "top_shortlist": shortlist}
 
-def generate_cover_letters_node(state: AgentState):
-    drafted_letters = {}
+def drafter_agent_node(state: AgentState):
+    """Drafter Agent: Formulates customized application assets using LaTeX typography syntax."""
+    if not state.top_shortlist:
+        return {"drafted_latex": "", "approved": True}
+        
+    target_job = state.top_shortlist[state.current_job_idx]
+    feedback_context = f"Previous execution review errors to address:\n{state.review_feedback}" if state.review_feedback else ""
+    
+    prompt = f"""
+    You are a professional executive typography designer. Write a highly tailored cover letter 
+    for {state.profile.name} targeting the role of {target_job.job_title}.
+    
+    Candidate Summary: {state.profile.experience_summary}
+    Core Competencies: {state.profile.skills}
+    {feedback_context}
+    Return ONLY valid, raw, compilation-ready LaTeX syntax code. 
+    Include standard document structural markers like '\\documentclass{{article}}\(', '\begin{{document}}', and '\end\){{document}}'.
+    Ensure that special reserved layout characters like %, &, \$, and _ are properly escaped.
+    Do NOT warp code segments within markdown block structures like ```latex. Begin immediately with '\\documentclass'.
+    """
+    
     google_key = state.google_api_key if state.google_api_key else st.secrets.get("GOOGLE_API_KEY", "")
-    
-    for score_card in state.ranked_jobs:
-        if score_card.threshold_passed:
-            job_details = next((j for j in state.raw_jobs if j["id"] == score_card.job_id), None)
-            job_requirements = job_details["requirements"] if job_details else "Standard Role"
-            
-            writer_prompt = f"""
-            Write a highly professional, tailored cover letter for a candidate named {state.profile.name}.
-            Target Position: {score_card.job_title}
-            Job Context/Company Requirements: {job_requirements}
-            Candidate Background Summary: {state.profile.experience_summary}
-            Candidate Explicit Skills Matrix: {state.profile.skills}
-            Structure it cleanly with dates, salutations, body paragraph, and closing. Do not output markdown text styling tags.
-            """
-            
-            letter_written = False
-            if google_key:
-                try:
-                    llm = get_gemini_llm()
-                    draft = llm.invoke(writer_prompt).content.strip()
-                    drafted_letters[score_card.job_id] = draft
-                    letter_written = True
-                except Exception as e:
-                    print(f"⚠️ Gemini writing failed ({e}). Re-routing to Hugging Face...")
+    if google_key:
+        response = get_gemini_llm().invoke(prompt).content.strip()
+    else:
+        response = get_hf_llm(state).invoke([HumanMessage(content=prompt)]).content.strip()
+        
+    if response.startswith("```"):
+        response = response.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    return {"drafted_latex": response}
 
-            if not letter_written:
-                try:
-                    llm = get_hf_llm(state)
-                    messages = [
-                        SystemMessage(content="You are an expert executive recruiter writing comprehensive corporate cover letters. Provide the complete text output without truncating or stopping mid-sentence."),
-                        HumanMessage(content=writer_prompt)
-                    ]
-                    draft = llm.invoke(messages).content.strip()
-                    drafted_letters[score_card.job_id] = draft
-                except Exception as write_err:
-                    print(f"⚠️ HF Letter writing failed: {write_err}")
-                    
-    return {"cover_letters": drafted_letters}
+def reviewer_agent_node(state: AgentState):
+    """Reviewer Agent: Checks text layout outputs against system rules criteria."""
+    if not state.drafted_latex:
+        return {"approved": True}
+        
+    prompt = f"""
+    You are a critical quality control inspector checking LaTeX documents for compile defects.
+    Analyze the following code payload for syntax formatting bugs or missing structures:
+    
+    {state.drafted_latex}
+    
+    If you discover unescaped characters, incomplete sections, or bad layout properties, 
+    provide actionable correction details. 
+    Otherwise, if the script is complete, flawless, and compilation-ready, reply with EXACTLY the word: APPROVED
+    """
+    
+    google_key = state.google_api_key if state.google_api_key else st.secrets.get("GOOGLE_API_KEY", "")
+    if google_key:
+        feedback = get_gemini_llm().invoke(prompt).content.strip()
+    else:
+        feedback = get_hf_llm(state).invoke([HumanMessage(content=prompt)]).content.strip()
+        
+    if "APPROVED" in feedback.upper():
+        return {"approved": True, "review_feedback": ""}
+    return {"approved": False, "review_feedback": feedback}
 
-def generate_pdf_document(candidate_name: str, job_title: str, document_body: str) -> io.BytesIO:
-    """Transforms plain text agent generation copy into a production-grade binary layout stream buffer strictly using ReportLab flowables."""
-    buffer = io.BytesIO()
+def compile_latex_node(state: AgentState):
+    """LaTeX to PDF Engine: Compiles structural documents into standard binary assets via CLI."""
+    if not state.drafted_latex:
+        return {"application_pdf_binary": None}
+        
+    tex_filename = "tailored_application.tex"
+    pdf_filename = "tailored_application.pdf"
     
-    doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=letter, 
-        rightMargin=54, 
-        leftMargin=54, 
-        topMargin=54, 
-        bottomMargin=54,
-        title=f"Cover Letter - {job_title}"
-    )
-    
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle(
-        'DocTitle', 
-        parent=styles['Heading1'], 
-        fontSize=18, 
-        leading=22, 
-        textColor=colors.HexColor("#1A365D"), 
-        spaceAfter=15
-    )
-    body_style = ParagraphStyle(
-        'DocBody', 
-        parent=styles['Normal'], 
-        fontSize=10, 
-        leading=15, 
-        textColor=colors.HexColor("#2D3748"), 
-        spaceAfter=12
-    )
-    
-    story = []
-    story.append(Paragraph(f"<b>Application Document: Tailored Cover Letter</b>", title_style))
-    story.append(Paragraph(f"<b>Candidate Reference Name:</b> {candidate_name}", body_style))
-    story.append(Paragraph(f"<b>Evaluated Posting Title:</b> {job_title}", body_style))
-    story.append(Spacer(1, 15))
-    
-    for paragraph in document_body.split("\n\n"):
-        clean_paragraph = paragraph.strip().replace("\n", "<br/>")
-        if clean_paragraph:
-            story.append(Paragraph(clean_paragraph, body_style))
+    with open(tex_filename, "w", encoding="utf-8") as f:
+        f.write(state.drafted_latex)
+        
+    try:
+        # Note: 'pdflatex' can be substituted here based on your environment's path variables
+        subprocess.run(["tectonic", tex_filename], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        with open(pdf_filename, "rb") as f:
+            pdf_bytes = f.read()
             
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+        # Clean up temporary generation artifacts
+        if os.path.exists(tex_filename): os.remove(tex_filename)
+        if os.path.exists(pdf_filename): os.remove(pdf_filename)
+        
+        return {"application_pdf_binary": pdf_bytes, "approved": True}
+    except Exception as e:
+        print(f"💥 PDF Engine Compiling Exception: {e}")
+        return {"approved": False, "review_feedback": f"System compilation failed: {str(e)}. Please correct syntax bugs."}
