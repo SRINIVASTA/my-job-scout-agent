@@ -19,9 +19,9 @@ class AgentState(BaseModel):
     search_query: Optional[str] = None
     raw_jobs: List[dict] = []
     ranked_jobs: List[JobMatchScore] = []
-    top_shortlist: List[JobMatchScore] = []  # Target Pipeline Shortlist
+    top_shortlist: List[JobMatchScore] = Field(default=[], description="Top-ranked jobs meeting the score threshold criteria")
     
-    # Target Multi-Agent & LaTeX State Processing Variables
+    # Iterative Agentic Loops & LaTeX Assets Pipelines
     current_job_idx: int = 0
     drafted_latex: str = ""
     review_feedback: str = ""
