@@ -248,15 +248,22 @@ def compile_latex_node(state: AgentState):
         f.write(state.drafted_latex)
         
     try:
-        # Note: 'pdflatex' can be substituted here based on your environment's path variables
-        subprocess.run(["tectonic", tex_filename], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Executes the native pdflatex compiler from the newly configured packages setup
+        subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", tex_filename], 
+            check=True, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL
+        )
         
         with open(pdf_filename, "rb") as f:
             pdf_bytes = f.read()
             
-        # Clean up temporary generation artifacts
-        if os.path.exists(tex_filename): os.remove(tex_filename)
-        if os.path.exists(pdf_filename): os.remove(pdf_filename)
+        # Clean up temporary generation workspace artifacts
+        for ext in [".tex", ".pdf", ".aux", ".log"]:
+            base_path = tex_filename.replace(".tex", ext)
+            if os.path.exists(base_path): 
+                os.remove(base_path)
         
         return {"application_pdf_binary": pdf_bytes, "approved": True}
     except Exception as e:
