@@ -1,7 +1,8 @@
-### 4. `app.py`
-This updated frontend file replaces the single-pass ReportLab logic with interactive metric tables, live inspection logs for the compiled LaTeX source, and a custom `/outcome` logging component to handle the human-in-the-loop feedback sequence.
-
-```python
+""
+This updated frontend file replaces the single-pass ReportLab logic with interactive metric tables, 
+live inspection logs for the compiled LaTeX source, and a custom /outcome logging component 
+to handle the human-in-the-loop feedback sequence.
+"""
 import os
 import streamlit as st
 from pypdf import PdfReader
@@ -12,7 +13,6 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide"
 )
-
 if "activated" not in st.session_state:
     st.session_state.activated = False
 
