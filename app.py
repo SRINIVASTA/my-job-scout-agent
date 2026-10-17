@@ -108,12 +108,20 @@ if uploaded_file is not None:
                 
                 st.markdown("---")
                 
-                # Render Shortlist Table View
+                # Find this section inside your app.py file:
                 st.subheader("📊 Phase 2 Filter Result: Top Job Shortlist")
                 top_shortlist = final_output_state.get("top_shortlist", [])
+                raw_jobs_pool = final_output_state.get("ranked_jobs", []) # Tracks all scored roles before filter
                 
                 if not top_shortlist:
                     st.warning("No scraped vacancy records passed your minimum compatibility scoring bounds.")
+                    
+                    # --- DEBUG VISIBILITY HOOK: SHOW BALKED ITEMS ---
+                    if raw_jobs_pool:
+                        with st.expander("🔎 Inspect Evaluated Roles Dropped by Threshold Filter"):
+                            for r_job in raw_jobs_pool:
+                                st.markdown(f"**Title:** {r_job.job_title} | **Score Given:** `{r_job.fit_score}/100`")
+                                st.caption(f"Reason for markdown penalty: {r_job.gap_explanation}")
                 else:
                     # Multi-attribute comparison table rendering layout
                     shortlist_data = [
