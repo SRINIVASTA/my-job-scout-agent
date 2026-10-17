@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 class CandidateProfile(BaseModel):
     name: str = Field(description="Full name of the candidate")
@@ -19,9 +19,17 @@ class AgentState(BaseModel):
     search_query: Optional[str] = None
     raw_jobs: List[dict] = []
     ranked_jobs: List[JobMatchScore] = []
-    cover_letters: Dict[str, str] = {}
+    top_shortlist: List[JobMatchScore] = []  # Target Pipeline Shortlist
+    
+    # Target Multi-Agent & LaTeX State Processing Variables
+    current_job_idx: int = 0
+    drafted_latex: str = ""
+    review_feedback: str = ""
+    approved: bool = False
+    application_pdf_binary: Optional[bytes] = None
+    
     match_threshold: int = 70
-    time_filter: str = "past 3 days" # ⏱️ Extends time boundary states downstream
+    time_filter: str = "past 3 days"
     
     # Internal dynamic transit tracking maps for keys
     google_api_key: Optional[str] = None
